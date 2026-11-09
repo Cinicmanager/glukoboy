@@ -25,7 +25,7 @@ namespace Bubliklyuk
 
         private readonly TaskGenerator generator;
         private readonly int taskCount;
-        private readonly Action failure;
+        private readonly Action<Exception> failure;
         private readonly Dictionary<string, Image> images = new Dictionary<string, Image>();
         private readonly TextBox answer;
         private readonly ActionButton submit;
@@ -67,7 +67,7 @@ namespace Bubliklyuk
 
         private float AnswerRowY { get { return exercise != null && exercise.LongText ? 664 : 552; } }
 
-        internal AttackForm(Settings settings, TaskGenerator generator, int taskCount, Action failure)
+        internal AttackForm(Settings settings, TaskGenerator generator, int taskCount, Action<Exception> failure)
         {
             this.generator = generator;
             this.taskCount = taskCount;
@@ -131,7 +131,7 @@ namespace Bubliklyuk
                 focusTimer.Start();
                 ForceFocus();
             }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("AttackForm.OnShown", ex); Fail(ex); }
         }
 
         protected override void OnResize(EventArgs e)
@@ -139,7 +139,7 @@ namespace Bubliklyuk
             base.OnResize(e);
             if (answer == null || submit == null) return;
             try { LayoutScene(); }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("AttackForm.OnResize", ex); Fail(ex); }
         }
 
         private void LayoutScene()
@@ -248,7 +248,7 @@ namespace Bubliklyuk
                 submit.Enabled = false;
                 Invalidate();
             }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("AttackForm.CheckAnswer", ex); Fail(ex); }
         }
 
         private void AnimationTick(object sender, EventArgs e)
@@ -332,7 +332,7 @@ namespace Bubliklyuk
                 if (barChanged || (stage == Stage.Hit && now - barStarted < 340))
                     Invalidate(Rectangle.Ceiling(R(60, 26, 1800, 140)));
             }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("AttackForm.AnimationTick", ex); Fail(ex); }
         }
 
         private void UpdateBar(long now)
@@ -344,7 +344,7 @@ namespace Bubliklyuk
         private void FocusTick(object sender, EventArgs e)
         {
             try { ForceFocus(); }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("AttackForm.FocusTick", ex); Fail(ex); }
         }
 
         private void ForceFocus()
@@ -394,13 +394,14 @@ namespace Bubliklyuk
                 DrawSpeech(g, now);
                 base.OnPaint(e);
             }
-            catch
+            catch (Exception ex)
             {
+                Diag.Log("AttackForm.OnPaint", ex);
                 // Do not destroy a native window while its WM_PAINT is being dispatched.
                 if (!stopping)
                 {
                     StopTimers();
-                    BeginInvoke(new Action(Fail));
+                    BeginInvoke(new Action(delegate { Fail(ex); }));
                 }
             }
         }
@@ -916,7 +917,7 @@ namespace Bubliklyuk
                     using (Image source = Image.FromStream(stream)) return new Bitmap(source);
                 }
             }
-            catch { return null; }
+            catch (Exception ex) { Diag.Log("AttackForm.LoadImage " + name, ex); return null; }
         }
 
         internal static GraphicsPath Rounded(RectangleF rect, float radius)
@@ -937,10 +938,10 @@ namespace Bubliklyuk
             if (focusTimer != null) focusTimer.Stop();
         }
 
-        private void Fail()
+        private void Fail(Exception ex)
         {
             if (stopping) return;
-            failure();
+            failure(ex);
         }
 
         internal void Abort()

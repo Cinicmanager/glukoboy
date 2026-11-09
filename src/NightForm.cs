@@ -17,7 +17,7 @@ namespace Bubliklyuk
         private static readonly Color Cream = Color.FromArgb(255, 248, 232);
         private readonly DateTime startTime;
         internal readonly DateTime EndTime;
-        private readonly Action failure;
+        private readonly Action<Exception> failure;
         private readonly Dictionary<string, Image> images = new Dictionary<string, Image>();
         private readonly System.Windows.Forms.Timer frames;
         private readonly System.Windows.Forms.Timer focus;
@@ -33,7 +33,7 @@ namespace Bubliklyuk
             "У меня даже тапок перегрелся", "Вентилятор дует. Я отдыхаю",
             "Сегодня захвачу только подушку", "До утра работаю бубликом" };
 
-        internal NightForm(DateTime start, DateTime end, Action failure)
+        internal NightForm(DateTime start, DateTime end, Action<Exception> failure)
         {
             startTime = start;
             EndTime = end;
@@ -100,13 +100,13 @@ namespace Bubliklyuk
                 Invalidate(Rectangle.Ceiling(R(60, 210, 590, 610)));
                 Invalidate(Rectangle.Ceiling(R(780, 700, 930, 220)));
             }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("NightForm.Frame", ex); Fail(ex); }
         }
         private void FocusTick(object sender, EventArgs e)
         {
             if (stopping || IsDisposed || !Visible) return;
             try { TopMost = true; BringToFront(); Native.SetForegroundWindow(Handle); Activate(); }
-            catch { Fail(); }
+            catch (Exception ex) { Diag.Log("NightForm.FocusTick", ex); Fail(ex); }
         }
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
@@ -154,9 +154,10 @@ namespace Bubliklyuk
                 TextAt(g, phrases[phraseIndex], 30, Cream, R(85, 860, 518, 90));
                 base.OnPaint(e);
             }
-            catch
+            catch (Exception ex)
             {
-                if (!stopping) { StopTimers(); BeginInvoke(new Action(Fail)); }
+                Diag.Log("NightForm.OnPaint", ex);
+                if (!stopping) { StopTimers(); BeginInvoke(new Action(delegate { Fail(ex); })); }
             }
         }
         private void DrawThermometer(Graphics g)
@@ -228,9 +229,9 @@ namespace Bubliklyuk
                     using (Image image = Image.FromStream(stream)) return new Bitmap(image);
                 }
             }
-            catch { return null; }
+            catch (Exception ex) { Diag.Log("NightForm.Load " + name, ex); return null; }
         }
-        private void Fail() { if (!stopping) failure(); }
+        private void Fail(Exception ex) { if (!stopping) failure(ex); }
         private void StopTimers()
         {
             if (frames != null) frames.Stop();

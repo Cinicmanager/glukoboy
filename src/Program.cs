@@ -9,7 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.0.1.0")]
+[assembly: AssemblyFileVersion("1.0.1.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -28,12 +29,14 @@ namespace Bubliklyuk
                 bool updated = Array.IndexOf(args, "--updated") >= 0;
                 mutex = new Mutex(false, "Local\\Glukoboy.1");
                 try { owner = mutex.WaitOne(updated ? 15000 : 0); }
-                catch (AbandonedMutexException) { owner = true; }
-                try { Native.SetProcessDPIAware(); } catch { }
+                catch (AbandonedMutexException ex) { Diag.Log("Program.Main.WaitOne", ex); owner = true; }
+                try { Native.SetProcessDPIAware(); }
+                catch (Exception ex) { Diag.Log("Program.Main.SetProcessDPIAware", ex); }
                 Application.EnableVisualStyles();
                 Application.SetCompatibleTextRenderingDefault(false);
                 if (!owner)
                 {
+                    Diag.Info("startup: another instance already owns the mutex");
                     using (StartupNotice notice = new StartupNotice("Глюкобой уже работает", 3000))
                         Application.Run(notice);
                     return;
@@ -42,11 +45,14 @@ namespace Bubliklyuk
                 Application.ThreadException += OnThreadException;
                 AppDomain.CurrentDomain.UnhandledException += OnFatalException;
                 Updater.CleanupOld();
-                context = new GameContext(Settings.Load(), updated);
+                Settings settings = Settings.Load();
+                LogStartup(settings);
+                context = new GameContext(settings, updated);
                 Application.Run(context);
             }
             catch (Exception error)
             {
+                Diag.Log("Program.Main", error);
                 if (context != null) context.Shutdown();
                 MessageBox.Show("Не удалось запустить Глюкобой.\r\n" + error.Message,
                     "Глюкобой", MessageBoxButtons.OK, MessageBoxIcon.Information);
@@ -66,11 +72,30 @@ namespace Bubliklyuk
         }
         private static void OnThreadException(object sender, ThreadExceptionEventArgs e)
         {
-            if (context != null) context.RecoverUi();
+            Diag.Log("Program.OnThreadException", e.Exception);
+            if (context != null) context.RecoverUi(e.Exception);
         }
         private static void OnFatalException(object sender, UnhandledExceptionEventArgs e)
         {
+            Exception ex = e.ExceptionObject as Exception;
+            if (ex != null) Diag.Log("Program.OnFatalException", ex);
+            else Diag.Info("Program.OnFatalException: " + Convert.ToString(e.ExceptionObject, CultureInfo.InvariantCulture));
             if (context != null) context.RestoreAudio();
+        }
+        private static void LogStartup(Settings settings)
+        {
+            try
+            {
+                Diag.Info("startup: version=" + Assembly.GetExecutingAssembly().GetName().Version.ToString() +
+                    "; exe=" + Assembly.GetExecutingAssembly().Location +
+                    "; Grade=" + settings.Grade.ToString(CultureInfo.InvariantCulture) +
+                    "; Level=" + settings.Level.ToString(CultureInfo.InvariantCulture) +
+                    "; TestMode=" + (settings.TestMode ? "1" : "0"));
+                Diag.Info("screen: " + Screen.PrimaryScreen.Bounds.ToString());
+                using (Graphics graphics = Graphics.FromHwnd(IntPtr.Zero))
+                    Diag.Info("DPI: " + graphics.DpiX.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception ex) { Diag.Log("Program.LogStartup", ex); }
         }
     }
 
@@ -133,7 +158,7 @@ namespace Bubliklyuk
                     values[line.Substring(0, at).Trim()] = value.Trim();
                 }
             }
-            catch { }
+            catch (Exception ex) { Diag.Log("Settings.Load", ex); }
             // Legacy keys are deliberately ignored.
             s.IntervalMin = ReadInt(values, "IntervalMin", 15, 1, 1440);
             s.IntervalMax = ReadInt(values, "IntervalMax", 20, 1, 1440);
@@ -222,6 +247,9 @@ namespace Bubliklyuk
         private int dialogDepth;
         private bool exiting;
         private bool recovering;
+        private bool openingAttack;
+        private bool showingFailureNotice;
+        private long lastFailureNotice;
 
         internal GameContext(Settings settings, bool updatedOnStart)
         {
@@ -236,7 +264,9 @@ namespace Bubliklyuk
             heartbeat.Interval = 1000;
             heartbeat.Tick += OnHeartbeat;
             try { hotKey = new HotKeyWindow(AttackNow, Shutdown, SkipNight, CheckForUpdates); }
-            catch { cycleTimer.Dispose(); heartbeat.Dispose(); throw; }
+            catch (Exception ex) { Diag.Log("GameContext.ctor.HotKeyWindow", ex); cycleTimer.Dispose(); heartbeat.Dispose(); throw; }
+            if (hotKey.Unavailable.Count > 0)
+                Diag.Info("unavailable hotkeys: " + String.Join(", ", hotKey.Unavailable.ToArray()));
             updateDispatcher = new Control();
             updateDispatcher.CreateControl();
             updater = new Updater(updateDispatcher,
@@ -249,7 +279,7 @@ namespace Bubliklyuk
                 if (DateTime.TryParseExact(File.ReadAllText(Settings.FilePath("night-state.txt"), Encoding.UTF8).Trim(),
                     "s", CultureInfo.InvariantCulture, DateTimeStyles.None, out saved)) skipUntil = saved;
             }
-            catch { }
+            catch (Exception ex) { Diag.Log("GameContext.ctor.LoadNightState", ex); }
             // First callback runs only after Application.Run starts its message loop.
             cycleTimer.Interval = 1;
             cycleTimer.Start();
@@ -303,7 +333,7 @@ namespace Bubliklyuk
                     if (warning.Length > 0)
                         ShowInformation(warning + "\r\n\r\nПрограмма продолжит работу.");
                 }
-                catch { RecoverUi(); }
+                catch (Exception ex) { Diag.Log("GameContext.OnCycle", ex); RecoverUi(ex); }
                 startupComplete = true;
                 return;
             }
@@ -316,7 +346,7 @@ namespace Bubliklyuk
                 CheckSchedule();
                 if (!exiting && updater != null) updater.TryApplyPending();
             }
-            catch { RecoverUi(); }
+            catch (Exception ex) { Diag.Log("GameContext.OnHeartbeat", ex); RecoverUi(ex); }
         }
         private void CheckForUpdates()
         {
@@ -359,12 +389,21 @@ namespace Bubliklyuk
         }
         private void AttackNow()
         {
-            if (exiting || !initialized || attack != null || night != null) return;
+            if (exiting) { Diag.Info("attack: exiting"); return; }
+            if (!initialized) { Diag.Info("attack: not initialized"); return; }
+            if (attack != null) { Diag.Info("attack: already open"); return; }
+            if (night != null) { Diag.Info("attack: night window open"); return; }
             DateTime now = DateTime.Now;
             DateTime start, end;
-            if (IsBlocked(now, out start, out end)) { EnterNight(start, end); return; }
-            if (IsWarningWindow(now)) { CheckSchedule(); return; }
+            if (IsBlocked(now, out start, out end))
+            {
+                Diag.Info("attack: night schedule");
+                EnterNight(start, end);
+                return;
+            }
+            if (IsWarningWindow(now)) { Diag.Info("attack: night warning window"); CheckSchedule(); return; }
             cycleTimer.Stop();
+            openingAttack = true;
             try
             {
                 audio.Begin();
@@ -374,7 +413,8 @@ namespace Bubliklyuk
                 attack.FormClosed += OnAttackClosed;
                 attack.Show();
             }
-            catch { RecoverUi(); }
+            catch (Exception ex) { Diag.Log("GameContext.AttackNow", ex); RecoverUi(ex); }
+            finally { openingAttack = false; }
         }
         private void OnAttackClosed(object sender, FormClosedEventArgs e)
         {
@@ -432,7 +472,11 @@ namespace Bubliklyuk
                 File.WriteAllText(Settings.FilePath("night-state.txt"), end.ToString("s", CultureInfo.InvariantCulture),
                     new UTF8Encoding(true));
             }
-            catch { warning = "Пропуск ночи действует до перезапуска: срок не удалось сохранить."; }
+            catch (Exception ex)
+            {
+                Diag.Log("GameContext.SkipNight.SaveState", ex);
+                warning = "Пропуск ночи действует до перезапуска: срок не удалось сохранить.";
+            }
             // A hotkey can arrive just after NightFrom but before the next heartbeat.
             // End a still-visible daytime attack before releasing its audio owner.
             AttackForm oldAttack = attack;
@@ -448,9 +492,11 @@ namespace Bubliklyuk
             ShowNotice("Ночь пропущена до " + end.ToString("HH:mm", CultureInfo.InvariantCulture), 3000);
             if (warning.Length > 0) ShowInformation(warning);
         }
-        internal void RecoverUi()
+        internal void RecoverUi() { RecoverUi(null); }
+        internal void RecoverUi(Exception error)
         {
-            if (exiting || recovering) return;
+            if (exiting || recovering || showingFailureNotice) return;
+            bool attackFailed = error != null && (attack != null || openingAttack);
             recovering = true;
             try
             {
@@ -460,17 +506,37 @@ namespace Bubliklyuk
                 if (old != null)
                 {
                     old.FormClosed -= OnAttackClosed;
-                    try { old.Abort(); } catch { }
+                    try { old.Abort(); }
+                    catch (Exception ex) { Diag.Log("GameContext.RecoverUi.AbortAttack", ex); }
                 }
-                try { CloseNight(); } catch { }
+                try { CloseNight(); }
+                catch (Exception ex) { Diag.Log("GameContext.RecoverUi.CloseNight", ex); }
             }
             finally
             {
                 recovering = false;
                 // Night recovery is retried by heartbeat; never recursively rebuild a broken form.
-                DateTime start, end;
-                if (!IsBlocked(DateTime.Now, out start, out end)) ScheduleDay(false);
+                try
+                {
+                    DateTime start, end;
+                    if (!IsBlocked(DateTime.Now, out start, out end)) ScheduleDay(false);
+                }
+                finally { if (attackFailed) ShowAttackFailure(error); }
             }
+        }
+        private void ShowAttackFailure(Exception error)
+        {
+            long now = System.Diagnostics.Stopwatch.GetTimestamp();
+            if (showingFailureNotice || (lastFailureNotice != 0 &&
+                (now - lastFailureNotice) / (double)System.Diagnostics.Stopwatch.Frequency < 60)) return;
+            lastFailureNotice = now;
+            showingFailureNotice = true;
+            try
+            {
+                ShowNotice("Атака сорвалась: " + error.Message + ". Подробности в errors.log", 8000);
+            }
+            catch (Exception ex) { Diag.Log("GameContext.ShowAttackFailure", ex); }
+            finally { showingFailureNotice = false; }
         }
         internal void RestoreAudio() { audio.Restore(); }
         private void ShowInformation(string text)
@@ -506,20 +572,24 @@ namespace Bubliklyuk
                     AttackForm old = attack;
                     attack = null;
                     old.FormClosed -= OnAttackClosed;
-                    try { old.Abort(); } catch { }
+                    try { old.Abort(); }
+                    catch (Exception ex) { Diag.Log("GameContext.Shutdown.AbortAttack", ex); }
                 }
-                try { CloseNight(); } catch { }
+                try { CloseNight(); }
+                catch (Exception ex) { Diag.Log("GameContext.Shutdown.CloseNight", ex); }
                 foreach (StartupNotice notice in notices)
                 {
                     try { if (!notice.IsDisposed) { notice.Close(); notice.Dispose(); } }
-                    catch { }
+                    catch (Exception ex) { Diag.Log("GameContext.Shutdown.CloseNotice", ex); }
                 }
                 notices.Clear();
             }
             finally
             {
-                try { audio.Restore(); } catch { }
-                try { hotKey.Dispose(); } catch { }
+                try { audio.Restore(); }
+                catch (Exception ex) { Diag.Log("GameContext.Shutdown.RestoreAudio", ex); }
+                try { hotKey.Dispose(); }
+                catch (Exception ex) { Diag.Log("GameContext.Shutdown.DisposeHotKeys", ex); }
                 ExitThread();
             }
         }
@@ -560,7 +630,8 @@ namespace Bubliklyuk
         private void Register(int id, uint modifiers, uint key, string name)
         {
             bool success = false;
-            try { success = Native.RegisterHotKey(Handle, id, modifiers, key); } catch { }
+            try { success = Native.RegisterHotKey(Handle, id, modifiers, key); }
+            catch (Exception ex) { Diag.Log("HotKeyWindow.Register " + name, ex); }
             if (success) registered.Add(id); else Unavailable.Add(name);
         }
         protected override void WndProc(ref Message m)
@@ -568,10 +639,14 @@ namespace Bubliklyuk
             if (m.Msg == 0x0312)
             {
                 int id = m.WParam.ToInt32();
-                if (id == 17040) { attackNow(); return; }
-                if (id == 17041 || id == 17042) { exit(); return; }
-                if (id == 17043) { skipNight(); return; }
-                if (id == 17044) { checkUpdate(); return; }
+                if (id == 17040) { Diag.Info("hotkey Ctrl+Alt+B"); attackNow(); return; }
+                if (id == 17041 || id == 17042)
+                {
+                    Diag.Info(id == 17041 ? "hotkey Ctrl+Alt+Q" : "hotkey Ctrl+Shift+F12");
+                    exit(); return;
+                }
+                if (id == 17043) { Diag.Info("hotkey Ctrl+Alt+N"); skipNight(); return; }
+                if (id == 17044) { Diag.Info("hotkey Ctrl+Alt+U"); checkUpdate(); return; }
             }
             base.WndProc(ref m);
         }

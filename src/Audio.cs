@@ -16,9 +16,10 @@ namespace Bubliklyuk
                 try
                 {
                     Guid eventContext = Guid.Empty;
-                    endpoint.SetMute(true, ref eventContext);
+                    int hr = endpoint.SetMute(true, ref eventContext);
+                    if (hr < 0) Diag.Log("AudioMute.Begin.ReapplyMute", Marshal.GetExceptionForHR(hr));
                 }
-                catch { }
+                catch (Exception ex) { Diag.Log("AudioMute.Begin.ReapplyMute", ex); }
                 return;
             }
             Restore();
@@ -41,7 +42,7 @@ namespace Bubliklyuk
                 Guid eventContext = Guid.Empty;
                 Marshal.ThrowExceptionForHR(endpoint.SetMute(true, ref eventContext));
             }
-            catch { Restore(); }
+            catch (Exception ex) { Diag.Log("AudioMute.Begin", ex); Restore(); }
             finally
             {
                 Release(activated);
@@ -63,10 +64,15 @@ namespace Bubliklyuk
                 {
                     Guid eventContext = Guid.Empty;
                     int hr = original.SetMute(savedMute, ref eventContext);
-                    if (hr < 0) original.SetMute(savedMute, ref eventContext);
+                    if (hr < 0)
+                    {
+                        Diag.Log("AudioMute.Restore.SetMute", Marshal.GetExceptionForHR(hr));
+                        int retryHr = original.SetMute(savedMute, ref eventContext);
+                        if (retryHr < 0) Diag.Log("AudioMute.Restore.SetMuteRetry", Marshal.GetExceptionForHR(retryHr));
+                    }
                 }
             }
-            catch { /* Device removal/driver failure is intentionally silent. */ }
+            catch (Exception ex) { Diag.Log("AudioMute.Restore", ex); }
             finally { Release(original); }
         }
 
@@ -74,7 +80,7 @@ namespace Bubliklyuk
         {
             if (value == null) return;
             try { if (Marshal.IsComObject(value)) Marshal.ReleaseComObject(value); }
-            catch { }
+            catch (Exception ex) { Diag.Log("AudioMute.Release", ex); }
         }
     }
 

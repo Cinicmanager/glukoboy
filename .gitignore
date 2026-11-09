@@ -6,3 +6,4 @@ night-state.txt
 *.bak
 /settings.ini
 /tasks.txt
+errors.log
