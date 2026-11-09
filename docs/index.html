@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Глюкобой — примеры вместо ещё одного видео</title>
+  <meta name="description" content="Бесплатная игра для Windows: раз в 15–20 минут БублиГлюк прерывает видео. Чтобы победить, ребёнок решает несколько заданий для 1–3 класса.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ru_RU">
+  <meta property="og:title" content="Глюкобой — примеры вместо ещё одного видео">
+  <meta property="og:description" content="БублиГлюк захватывает экран. Три-четыре задания — и можно продолжать. Бесплатно для Windows 10/11, исходники открыты.">
+  <meta property="og:image" content="https://cinicmanager.github.io/glukoboy/img/attack.webp">
+  <link rel="canonical" href="https://cinicmanager.github.io/glukoboy/">
+  <meta name="theme-color" content="#171B35">
+  <style>
+    :root{color-scheme:dark;--bg:#171B35;--purple:#A56BFF;--green:#A0F000;--text:#F4F3FF;--muted:#C6C8DB;--line:#42465F}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--text);font:17px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif}a{color:var(--green);text-underline-offset:4px}a:hover{color:#CBFF62}a:focus-visible,summary:focus-visible{outline:3px solid var(--green);outline-offset:5px}img{max-width:100%;height:auto;display:block}h1,h2,h3,p{margin:0}h1{font-size:clamp(3.2rem,8vw,6.6rem);line-height:1;letter-spacing:-.055em}h2{font-size:clamp(1.8rem,4vw,2.7rem);line-height:1.15;letter-spacing:-.025em}h3{font-size:1.25rem;line-height:1.3}p+p{margin-top:1rem}.wrap{width:min(1120px,calc(100% - 40px));margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:24px 0}.brand{font-weight:800;letter-spacing:.03em;color:var(--text);text-decoration:none}.top a:last-child{font-size:.9rem}.hero{position:relative;isolation:isolate;overflow:hidden;border-bottom:1px solid var(--line)}.hero:before{content:"";position:absolute;inset:0;z-index:-1;background:linear-gradient(90deg,rgba(23,27,53,.93),rgba(23,27,53,.5)),url('img/fon.webp') center/cover no-repeat;opacity:.65}.hero-grid{display:grid;grid-template-columns:1.1fr 1fr;align-items:center;gap:24px;padding:46px 0 60px}.eyebrow{font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;color:var(--green);font-weight:700;margin-bottom:20px}.lead{font-size:clamp(1.15rem,2.5vw,1.45rem);max-width:570px;margin-top:25px}.actions{display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-top:28px}.button{display:inline-flex;justify-content:center;align-items:center;padding:14px 22px;background:var(--green);color:#171B35;text-decoration:none;font-weight:800;border-radius:12px;line-height:1.35}.button:hover{background:#BEFF43;color:#171B35}.small{font-size:.85rem;color:var(--muted);margin-top:14px}.hero-art{width:100%;max-width:470px;justify-self:center;filter:drop-shadow(0 16px 35px #0B0D23)}section{padding:76px 0;border-bottom:1px solid var(--line)}.intro{display:grid;grid-template-columns:.7fr 1.3fr;gap:60px}.intro-copy{font-size:1.15rem;max-width:670px}.signature{color:var(--purple);font-size:.95rem;margin-top:18px}.section-head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:30px}.section-head p{color:var(--muted)}.steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.card{background:#20243F;border:1px solid var(--line);border-radius:20px;padding:24px;min-width:0}.step-art{height:235px;width:100%;object-fit:contain;margin-bottom:20px}.number{display:block;color:var(--green);font:700 .8rem/1.4 system-ui;letter-spacing:.1em;margin-bottom:10px}.card p{color:var(--muted);margin-top:12px}.features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}.features .card{padding:26px}.night{position:relative;isolation:isolate;overflow:hidden;background:#1B203C}.night:before{content:"";position:absolute;inset:0;background:url('img/night_bg.webp') left center/cover;opacity:.23;z-index:-1}.night img{height:130px;width:130px;object-fit:contain;margin:0 auto 18px}.tag{color:var(--purple);font-weight:700;font-size:.85rem;margin-bottom:12px}.install{display:grid;grid-template-columns:1fr 1.3fr;gap:60px}.install ol{margin:0;padding-left:24px}.install li{padding-left:8px;margin-bottom:18px}.install li::marker{color:var(--green);font-weight:800}code{font-family:Consolas,monospace;font-size:.9em;color:#DBBEFF;overflow-wrap:anywhere}.honest{display:grid;grid-template-columns:120px 1fr;gap:32px;align-items:start;max-width:900px}.honest img{width:120px;border-radius:20px}.honest h2{margin-bottom:24px}.honest p{color:var(--muted)}footer{padding:30px 0 40px}.footer-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px;color:var(--muted);font-size:.9rem}.skip{position:absolute;top:-100px;left:20px;background:var(--green);color:var(--bg);padding:10px;z-index:5}.skip:focus{top:10px}
+    @media(max-width:760px){.hero-grid{grid-template-columns:1fr;padding-top:26px;gap:20px}.hero-art{max-width:340px}.intro,.install{grid-template-columns:1fr;gap:26px}.steps,.features{grid-template-columns:1fr}.step-art{height:220px}.section-head{display:block}.section-head p{margin-top:14px}section{padding:48px 0}.honest{grid-template-columns:1fr;gap:20px}.honest img{width:76px}.features .night{display:grid;grid-template-columns:95px minmax(0,1fr);gap:16px;align-items:center}.night img{width:95px;height:120px;margin:0}.wrap{width:calc(100% - 32px)}.actions{gap:16px}.top{padding:20px 0}.top a:last-child{font-size:.82rem}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">К содержимому</a>
+  <header class="hero">
+    <nav class="wrap top" aria-label="Основная навигация"><a class="brand" href="#">ГЛЮКОБОЙ</a><a href="https://github.com/Cinicmanager/glukoboy">Код на GitHub ↗</a></nav>
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">Windows 10/11 · Бесплатно · 1–3 класс</p>
+        <h1>Глюкобой</h1>
+        <p class="lead">Раз в 15–20 минут БублиГлюк захватывает экран — ребёнок решает 3–4 задания, чтобы вернуться к видео.</p>
+        <div class="actions"><a class="button" href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.exe">Скачать для Windows</a><a href="#install">Как поставить ↓</a></div>
+        <p class="small">Один exe, установка не нужна. SmartScreen может показать предупреждение.</p>
+      </div>
+      <img class="hero-art" src="img/attack.webp" alt="БублиГлюк: фиолетовый одноглазый вирус с вилкой и молниями" width="520" height="520" fetchpriority="high">
+    </div>
+  </header>
+  <main id="main">
+    <section><div class="wrap intro">
+      <h2>Зачем</h2>
+      <div class="intro-copy"><p>Я отец первоклассника. Он всё время смотрит видео на ноутбуке. Воспитание детей — это тяжело, и я написал Глюкобой.</p><p>Родители девочек, возможно, меня не поймут. Родителям мальчиков софт может пригодиться: как минимум заставит порешать примеры, почти как домашка. И в игровой форме отвлечёт от ПК.</p><p class="signature">— Автор Глюкобоя</p></div>
+    </div></section>
+    <section><div class="wrap">
+      <div class="section-head"><h2>Как это выглядит</h2><p>У БублиГлюка опять свои планы.</p></div>
+      <div class="steps">
+        <article class="card"><img class="step-art" src="img/counter.webp" alt="БублиГлюк вытягивает руку с электрической вилкой" width="520" height="520" loading="lazy"><span class="number">01 / АТАКА</span><h3>Экран захвачен</h3><p>В случайный момент звук выключается. Экран закрывает окно без крестика. БублиГлюк пришёл за примерами.</p></article>
+        <article class="card"><img class="step-art" src="img/hit.webp" alt="Снаряд попадает в БублиГлюка" width="520" height="520" loading="lazy"><span class="number">02 / ЗАДАНИЯ</span><h3>Ответ — и удар</h3><p>Прочитать фразу, собрать слово из слогов, найти лишнее слово или решить пример. Верный ответ бьёт вирус: снаряд, искры, «Два подряд!».</p></article>
+        <article class="card"><img class="step-art" src="img/defeated.webp" alt="Побеждённый БублиГлюк расплющен, ботинок отлетел" width="520" height="520" loading="lazy"><span class="number">03 / ПОБЕДА</span><h3>БублиГлюк растёкся</h3><p>После 3–4 заданий — добивающий удар, и экран снова свободен. Ошибка не наказывает: вирус контратакует, щит отбивает.</p></article>
+      </div>
+    </div></section>
+    <section><div class="wrap">
+      <div class="section-head"><h2>Что внутри</h2></div>
+      <div class="features">
+        <article class="card"><p class="tag">1–3 КЛАСС</p><h3>По силам ребёнку</h3><p>В каждом классе три уровня сложности. 1 класс — «Кот мурлычет. Кто мурлычет?», 3 класс — задачи в два действия. Класс и уровень задаются в <code>settings.ini</code>, задания на чтение можно дописать в <code>tasks.txt</code>.</p></article>
+        <article class="card night"><img src="img/night_virus.webp" alt="Сонный БублиГлюк в ночном колпаке" width="520" height="520" loading="lazy"><div><h3>Ночью остываем</h3><p>С 21:00 до 07:00 — экран «ноутбук перегрелся/остывает». Время можно настроить.</p></div></article>
+        <article class="card"><p class="tag">ОБНОВЛЕНИЯ С GITHUB</p><h3>Новая версия сама</h3><p>Программа обновляется через Releases. Свои настройки и задания сохраняет. Чтобы выключить обновления, укажите <code>AutoUpdate=0</code>.</p></article>
+      </div>
+    </div></section>
+    <section id="install"><div class="wrap install">
+      <div><h2>Как поставить</h2><p class="small">Нужен Windows 10/11. Используется встроенный .NET Framework 4.</p></div>
+      <ol>
+        <li><a href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.exe">Скачайте Glukoboy.exe</a> и положите в отдельную папку.</li>
+        <li>Запустите exe. Файлы <code>settings.ini</code> и <code>tasks.txt</code> появятся сами, если их нет. При желании скачайте их из <a href="https://github.com/Cinicmanager/glukoboy/releases/latest">того же релиза</a>.</li>
+        <li>В <code>settings.ini</code> выберите <code>Grade</code> и <code>Level</code> от 1 до 3. Для первой атаки нажмите <strong>Ctrl+Alt+B</strong>. Выход — <strong>Ctrl+Alt+Q</strong>.</li>
+        <li>Для автозапуска нажмите <strong>Win+R</strong>, введите <code>shell:startup</code> и положите в открывшуюся папку ярлык на exe.</li>
+      </ol>
+    </div></section>
+    <section><div class="wrap honest">
+      <img src="img/shield.webp" alt="Щит с молнией" width="256" height="256" loading="lazy">
+      <div><h2>Честно</h2><p>Глюкобой — игра, которая прерывает просмотр и заставляет немного порешать. Родительского контроля и защиты здесь нет. Ребёнок, знакомый с диспетчером задач, закроет программу.</p><p>Exe не подписан. Windows SmartScreen может предупредить о запуске. Если вы доверяете скачанному файлу: «Подробнее → Выполнить в любом случае».</p><p>Антивирус тоже может насторожиться: программа выключает звук, открывает окно поверх всего и обновляется сама. Исходники открыты, сборка — через встроенный <code>csc.exe</code>. <a href="https://github.com/Cinicmanager/glukoboy#readme">Настройки и все клавиши родителя — в README</a>.</p></div>
+    </div></section>
+  </main>
+  <footer><div class="wrap footer-row"><span>Глюкобой · Открытый код · <a href="https://github.com/Cinicmanager/glukoboy/blob/main/LICENSE">Лицензия MIT</a></span><a href="https://github.com/Cinicmanager/glukoboy">Cinicmanager / glukoboy ↗</a></div></footer>
+</body>
+</html>

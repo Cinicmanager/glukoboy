@@ -1,0 +1,8 @@
+*.exe
+*.exe.new
+*.exe.old
+update.log
+night-state.txt
+*.bak
+/settings.ini
+/tasks.txt
