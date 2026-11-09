@@ -148,14 +148,38 @@ namespace Bubliklyuk
             if (scale <= 0) scale = 1;
             originX = (ClientSize.Width - 1920 * scale) / 2;
             originY = (ClientSize.Height - 1080 * scale) / 2;
-            Font newInput = new Font("Segoe UI", Math.Max(24, 48 * scale), FontStyle.Regular, GraphicsUnit.Pixel);
-            Font newButton = new Font("Segoe UI", Math.Max(20, 34 * scale), FontStyle.Bold, GraphicsUnit.Pixel);
-            answer.Font = newInput;
-            submit.Font = newButton;
-            if (inputFont != null) inputFont.Dispose();
-            if (buttonFont != null) buttonFont.Dispose();
-            inputFont = newInput;
-            buttonFont = newButton;
+            float inputSize = Math.Max(24, 48 * scale);
+            if (inputFont == null || inputFont.Size != inputSize)
+            {
+                Font newInput = new Font("Segoe UI", inputSize, FontStyle.Regular, GraphicsUnit.Pixel);
+                answer.Font = newInput;
+                if (Object.ReferenceEquals(answer.Font, newInput))
+                {
+                    Font oldInput = inputFont;
+                    inputFont = newInput;
+                    if (oldInput != null) oldInput.Dispose();
+                }
+                else
+                {
+                    newInput.Dispose();
+                }
+            }
+            float buttonSize = Math.Max(20, 34 * scale);
+            if (buttonFont == null || buttonFont.Size != buttonSize)
+            {
+                Font newButton = new Font("Segoe UI", buttonSize, FontStyle.Bold, GraphicsUnit.Pixel);
+                submit.Font = newButton;
+                if (Object.ReferenceEquals(submit.Font, newButton))
+                {
+                    Font oldButton = buttonFont;
+                    buttonFont = newButton;
+                    if (oldButton != null) oldButton.Dispose();
+                }
+                else
+                {
+                    newButton.Dispose();
+                }
+            }
             // Both controls share the same outer 112-unit row. The native single-line
             // editor is vertically centered inside a separately painted rounded frame.
             RectangleF field = R(791, AnswerRowY, 620, 112);
