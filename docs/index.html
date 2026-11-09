@@ -28,8 +28,8 @@
         <p class="eyebrow">Windows 10/11 · Бесплатно · 1–3 класс</p>
         <h1>Глюкобой</h1>
         <p class="lead">Раз в 15–20 минут БублиГлюк захватывает экран — ребёнок решает 3–4 задания, чтобы вернуться к видео.</p>
-        <div class="actions"><a class="button" href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.exe">Скачать для Windows</a><a href="#install">Как поставить ↓</a></div>
-        <p class="small">Один exe, установка не нужна. SmartScreen может показать предупреждение.</p>
+        <div class="actions"><a class="button" href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.zip">Скачать для Windows</a><a href="#install">Как поставить ↓</a></div>
+        <p class="small">Архив с exe, установка не нужна. SmartScreen может показать предупреждение.</p>
       </div>
       <img class="hero-art" src="img/attack.webp" alt="БублиГлюк: фиолетовый одноглазый вирус с вилкой и молниями" width="520" height="520" fetchpriority="high">
     </div>
@@ -52,20 +52,20 @@
       <div class="features">
         <article class="card"><p class="tag">1–3 КЛАСС</p><h3>По силам ребёнку</h3><p>В каждом классе три уровня сложности. 1 класс — «Кот мурлычет. Кто мурлычет?», 3 класс — задачи в два действия. Класс и уровень задаются в <code>settings.ini</code>, задания на чтение можно дописать в <code>tasks.txt</code>.</p></article>
         <article class="card night"><img src="img/night_virus.webp" alt="Сонный БублиГлюк в ночном колпаке" width="520" height="520" loading="lazy"><div><h3>Ночью остываем</h3><p>С 21:00 до 07:00 — экран «ноутбук перегрелся/остывает». Время можно настроить.</p></div></article>
-        <article class="card"><p class="tag">ОБНОВЛЕНИЯ С GITHUB</p><h3>Новая версия сама</h3><p>Программа обновляется через Releases. Свои настройки и задания сохраняет. Чтобы выключить обновления, укажите <code>AutoUpdate=0</code>.</p></article>
+        <article class="card"><p class="tag">ОБНОВЛЕНИЕ ПО ЗАПРОСУ</p><h3>Программа в интернет не ходит</h3><p>Новую версию ставит скрипт <code>Обновить.cmd</code>, когда вы его запустите. Настройки и задания сохраняются.</p></article>
       </div>
     </div></section>
     <section id="install"><div class="wrap install">
-      <div><h2>Как поставить</h2><p class="small">Нужен Windows 10/11. Используется встроенный .NET Framework 4.</p><div class="needs"><h3>Чтобы обновлялось само</h3><ul><li>Файл должен называться ровно <code>Glukoboy.exe</code>.</li><li>Нужен интернет.</li><li>Папка должна быть доступна на запись. Обычная папка подойдёт, <code>Program Files</code> — нет.</li><li>Антивирус в теории может помешать подменить exe. Тогда в <code>update.log</code> будет ошибка.</li></ul></div></div>
+      <div><h2>Как поставить</h2><p class="small">Нужен Windows 10/11. Используется встроенный .NET Framework 4.</p><div class="needs"><h3>Как обновить</h3><ul><li>Запустите <code>Обновить.cmd</code> из папки с программой.</li><li>Если вышла новая версия, скрипт скачает её, попросит закрыть Глюкобой через <strong>Ctrl+Alt+Q</strong> и запустит заново.</li><li>Нужен интернет. Файл должен называться ровно <code>Glukoboy.exe</code>.</li><li>Папка должна быть доступна на запись. Обычная папка подойдёт, <code>Program Files</code> — нет.</li></ul></div></div>
       <ol>
-        <li><a href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.exe">Скачайте Glukoboy.exe</a> и положите в отдельную папку.</li>
+        <li><a href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.zip">Скачайте Glukoboy.zip</a> и распакуйте в отдельную папку. Внутри <code>Glukoboy.exe</code> и скрипт <code>Обновить.cmd</code>.</li>
         <li>Запустите exe. Файлы <code>settings.ini</code> и <code>tasks.txt</code> появятся сами, если их нет. При желании скачайте их из <a href="https://github.com/Cinicmanager/glukoboy/releases/latest">того же релиза</a>.</li>
         <li>В <code>settings.ini</code> выберите <code>Grade</code> и <code>Level</code> от 1 до 3. Для первой атаки нажмите <strong>Ctrl+Alt+B</strong>. Выход — <strong>Ctrl+Alt+Q</strong>.</li>
         <li>Для автозапуска нажмите <strong>Win+R</strong>, введите <code>shell:startup</code> и положите в открывшуюся папку ярлык на exe.</li>
       </ol>
     </div></section>
     <section id="settings"><div class="wrap install">
-      <div><h2>Настройки</h2><p>Сразу после установки стоит <strong>1 класс, уровень 1</strong> — самые лёгкие задания.</p><table class="defaults"><tbody><tr><td>Класс<small><code>Grade</code></small></td><td>1</td></tr><tr><td>Уровень внутри класса, 1–3<small><code>Level</code></small></td><td>1</td></tr><tr><td>Счёт в 1 классе до<small><code>MathMax</code></small></td><td>10</td></tr><tr><td>Атака каждые, минут<small><code>IntervalMin / IntervalMax</code></small></td><td>15–20</td></tr><tr><td>Заданий за атаку<small><code>TaskMin / TaskMax</code></small></td><td>3–4</td></tr><tr><td>Ночной режим<small><code>NightFrom / NightTo</code></small></td><td>21:00–07:00</td></tr><tr><td>Автообновление<small><code>AutoUpdate</code></small></td><td>вкл</td></tr><tr><td>Тестовый режим<small><code>TestMode</code></small></td><td>выкл</td></tr></tbody></table></div>
+      <div><h2>Настройки</h2><p>Сразу после установки стоит <strong>1 класс, уровень 1</strong> — самые лёгкие задания.</p><table class="defaults"><tbody><tr><td>Класс<small><code>Grade</code></small></td><td>1</td></tr><tr><td>Уровень внутри класса, 1–3<small><code>Level</code></small></td><td>1</td></tr><tr><td>Счёт в 1 классе до<small><code>MathMax</code></small></td><td>10</td></tr><tr><td>Атака каждые, минут<small><code>IntervalMin / IntervalMax</code></small></td><td>15–20</td></tr><tr><td>Заданий за атаку<small><code>TaskMin / TaskMax</code></small></td><td>3–4</td></tr><tr><td>Ночной режим<small><code>NightFrom / NightTo</code></small></td><td>21:00–07:00</td></tr><tr><td>Тестовый режим<small><code>TestMode</code></small></td><td>выкл</td></tr></tbody></table></div>
       <div><h3>Как поменять</h3><ol><li>Закройте программу: <strong>Ctrl+Alt+Q</strong>.</li><li>Откройте <code>settings.ini</code> рядом с <code>Glukoboy.exe</code> в Блокноте.</li><li>Поменяйте число после <code>=</code> и сохраните файл.</li><li>Запустите <code>Glukoboy.exe</code> снова.</li></ol><p>Пример: 2 класс, второй уровень, атака раз в 30–40 минут.</p><pre class="ini"><span>; было Grade=1</span>
 Grade=2
 <span>; было Level=1</span>
@@ -75,7 +75,7 @@ IntervalMax=40</pre><p class="small">Уровень повышайте сами,
     </div></section>
     <section><div class="wrap honest">
       <img src="img/shield.webp" alt="Щит с молнией" width="256" height="256" loading="lazy">
-      <div><h2>Честно</h2><p>Глюкобой — игра, которая прерывает просмотр и заставляет немного порешать. Родительского контроля и защиты здесь нет. Ребёнок, знакомый с диспетчером задач, закроет программу.</p><p>Exe не подписан. Windows SmartScreen может предупредить о запуске. Если вы доверяете скачанному файлу: «Подробнее → Выполнить в любом случае».</p><p>Антивирус тоже может насторожиться: программа выключает звук, открывает окно поверх всего и обновляется сама. Исходники открыты, сборка — через встроенный <code>csc.exe</code>. <a href="https://github.com/Cinicmanager/glukoboy#readme">Настройки и все клавиши родителя — в README</a>.</p></div>
+      <div><h2>Честно</h2><p>Глюкобой — игра, которая прерывает просмотр и заставляет немного порешать. Родительского контроля и защиты здесь нет. Ребёнок, знакомый с диспетчером задач, закроет программу.</p><p>Exe не подписан. Windows SmartScreen может предупредить о запуске. Если вы доверяете скачанному файлу: «Подробнее → Выполнить в любом случае».</p><p>Антивирус тоже может насторожиться: программа выключает звук и открывает окно поверх всего. Исходники открыты, сборка — через встроенный <code>csc.exe</code>. <a href="https://github.com/Cinicmanager/glukoboy#readme">Настройки и все клавиши родителя — в README</a>.</p></div>
     </div></section>
   </main>
   <footer><div class="wrap footer-row"><span>Глюкобой · Открытый код · <a href="https://github.com/Cinicmanager/glukoboy/blob/main/LICENSE">Лицензия MIT</a></span><a href="https://github.com/Cinicmanager/glukoboy">Cinicmanager / glukoboy ↗</a></div></footer>

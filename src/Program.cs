@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.0.1.0")]
-[assembly: AssemblyFileVersion("1.0.1.0")]
+[assembly: AssemblyVersion("1.1.0.0")]
+[assembly: AssemblyFileVersion("1.1.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -20,15 +20,14 @@ namespace Bubliklyuk
     {
         private static GameContext context;
         [STAThread]
-        private static void Main(string[] args)
+        private static void Main()
         {
             bool owner = false;
             Mutex mutex = null;
             try
             {
-                bool updated = Array.IndexOf(args, "--updated") >= 0;
                 mutex = new Mutex(false, "Local\\Glukoboy.1");
-                try { owner = mutex.WaitOne(updated ? 15000 : 0); }
+                try { owner = mutex.WaitOne(0); }
                 catch (AbandonedMutexException ex) { Diag.Log("Program.Main.WaitOne", ex); owner = true; }
                 try { Native.SetProcessDPIAware(); }
                 catch (Exception ex) { Diag.Log("Program.Main.SetProcessDPIAware", ex); }
@@ -44,10 +43,9 @@ namespace Bubliklyuk
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
                 Application.ThreadException += OnThreadException;
                 AppDomain.CurrentDomain.UnhandledException += OnFatalException;
-                Updater.CleanupOld();
                 Settings settings = Settings.Load();
                 LogStartup(settings);
-                context = new GameContext(settings, updated);
+                context = new GameContext(settings);
                 Application.Run(context);
             }
             catch (Exception error)
@@ -107,7 +105,6 @@ namespace Bubliklyuk
         internal int TaskMax = 4;
         internal int Grade = 1;
         internal int Level = 1;
-        internal bool AutoUpdate = true;
         internal int MathMax = 10;
         internal TimeSpan NightFrom = new TimeSpan(21, 0, 0);
         internal TimeSpan NightTo = new TimeSpan(7, 0, 0);
@@ -123,9 +120,6 @@ namespace Bubliklyuk
             "Grade=1\r\n" +
             "; Level — уровень 1..3 внутри выбранного класса. Родитель повышает вручную.\r\n" +
             "Level=1\r\n" +
-            "; Автообновление exe с GitHub: 1 — включено, 0 — выключено.\r\n" +
-            "; Ctrl+Alt+U проверяет обновления вручную при любом AutoUpdate.\r\n" +
-            "AutoUpdate=1\r\n" +
             "; MathMax действует только в 1 классе, от 3 до 10; шаги 1–3.\r\n" +
             "MathMax=10\r\n" +
             "; Ночь по местному времени, формат ЧЧ:ММ.\r\n" +
@@ -168,7 +162,6 @@ namespace Bubliklyuk
             if (s.TaskMin > s.TaskMax) { int v = s.TaskMin; s.TaskMin = s.TaskMax; s.TaskMax = v; }
             s.Grade = ReadInt(values, "Grade", 1, 1, 3);
             s.Level = ReadInt(values, "Level", 1, 1, 3);
-            s.AutoUpdate = ReadInt(values, "AutoUpdate", 1, 0, 1) == 1;
             s.MathMax = ReadInt(values, "MathMax", 10, 3, 10);
             s.TestMode = ReadInt(values, "TestMode", 0, 0, 1) == 1;
             s.NightFrom = ReadTime(values, "NightFrom", new TimeSpan(21, 0, 0));
@@ -226,7 +219,6 @@ namespace Bubliklyuk
     internal sealed class GameContext : ApplicationContext
     {
         private readonly Settings settings;
-        private readonly bool updatedOnStart;
         private readonly TaskGenerator generator;
         private readonly Random random = new Random();
         private readonly System.Windows.Forms.Timer cycleTimer;
@@ -235,26 +227,21 @@ namespace Bubliklyuk
         private readonly AudioMute audio = new AudioMute();
         private readonly List<StartupNotice> notices = new List<StartupNotice>();
         private readonly string bankWarning;
-        private readonly Control updateDispatcher;
-        private readonly Updater updater;
         private AttackForm attack;
         private NightForm night;
         private DateTime skipUntil = DateTime.MinValue;
         private DateTime warnedStart = DateTime.MinValue;
         private bool waitingForMorning;
         private bool initialized;
-        private bool startupComplete;
-        private int dialogDepth;
         private bool exiting;
         private bool recovering;
         private bool openingAttack;
         private bool showingFailureNotice;
         private long lastFailureNotice;
 
-        internal GameContext(Settings settings, bool updatedOnStart)
+        internal GameContext(Settings settings)
         {
             this.settings = settings;
-            this.updatedOnStart = updatedOnStart;
             ReadingBank bank = ReadingBank.Load();
             bankWarning = bank.Warning;
             generator = new TaskGenerator(settings, bank);
@@ -263,16 +250,10 @@ namespace Bubliklyuk
             heartbeat = new System.Windows.Forms.Timer();
             heartbeat.Interval = 1000;
             heartbeat.Tick += OnHeartbeat;
-            try { hotKey = new HotKeyWindow(AttackNow, Shutdown, SkipNight, CheckForUpdates); }
+            try { hotKey = new HotKeyWindow(AttackNow, Shutdown, SkipNight); }
             catch (Exception ex) { Diag.Log("GameContext.ctor.HotKeyWindow", ex); cycleTimer.Dispose(); heartbeat.Dispose(); throw; }
             if (hotKey.Unavailable.Count > 0)
                 Diag.Info("unavailable hotkeys: " + String.Join(", ", hotKey.Unavailable.ToArray()));
-            updateDispatcher = new Control();
-            updateDispatcher.CreateControl();
-            updater = new Updater(updateDispatcher,
-                delegate(string text) { ShowNotice(text, 5000); },
-                delegate { return startupComplete && dialogDepth == 0 && !exiting && attack == null; },
-                Shutdown, settings.AutoUpdate);
             try
             {
                 DateTime saved;
@@ -322,9 +303,7 @@ namespace Bubliklyuk
                         waitingForMorning ? "Глюкобой запущен. Скоро пора остывать." :
                         "Глюкобой запущен. Атака через " + (settings.TestMode ? "10 секунд." :
                         (cycleTimer.Interval / 60000).ToString(CultureInfo.InvariantCulture) + " мин.");
-                    if (updatedOnStart)
-                        message = "Глюкобой обновлён до " + Updater.CurrentVersion.ToString(3) + ".\r\n" + message;
-                    if (!waitingForMorning || updatedOnStart)
+                    if (!waitingForMorning)
                         ShowNotice(message + "\r\nCtrl+Alt+B — атака, Ctrl+Alt+Q — выход", 3000);
                     string warning = bankWarning;
                     if (hotKey.Unavailable.Count > 0)
@@ -334,7 +313,6 @@ namespace Bubliklyuk
                         ShowInformation(warning + "\r\n\r\nПрограмма продолжит работу.");
                 }
                 catch (Exception ex) { Diag.Log("GameContext.OnCycle", ex); RecoverUi(ex); }
-                startupComplete = true;
                 return;
             }
             AttackNow();
@@ -344,13 +322,8 @@ namespace Bubliklyuk
             try
             {
                 CheckSchedule();
-                if (!exiting && updater != null) updater.TryApplyPending();
             }
             catch (Exception ex) { Diag.Log("GameContext.OnHeartbeat", ex); RecoverUi(ex); }
-        }
-        private void CheckForUpdates()
-        {
-            if (!exiting && updater != null) updater.CheckNow(true);
         }
         private void CheckSchedule()
         {
@@ -541,9 +514,7 @@ namespace Bubliklyuk
         internal void RestoreAudio() { audio.Restore(); }
         private void ShowInformation(string text)
         {
-            dialogDepth++;
-            try { MessageBox.Show(night, text, "Глюкобой", MessageBoxButtons.OK, MessageBoxIcon.Information); }
-            finally { dialogDepth--; }
+            MessageBox.Show(night, text, "Глюкобой", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         private void ShowNotice(string text, int duration)
         {
@@ -563,7 +534,6 @@ namespace Bubliklyuk
             exiting = true;
             try
             {
-                if (updater != null) updater.Dispose();
                 cycleTimer.Stop();
                 heartbeat.Stop();
                 audio.Restore();
@@ -600,7 +570,6 @@ namespace Bubliklyuk
                 Shutdown();
                 cycleTimer.Dispose();
                 heartbeat.Dispose();
-                if (updateDispatcher != null) updateDispatcher.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -608,15 +577,14 @@ namespace Bubliklyuk
 
     internal sealed class HotKeyWindow : NativeWindow, IDisposable
     {
-        private readonly Action attackNow, exit, skipNight, checkUpdate;
+        private readonly Action attackNow, exit, skipNight;
         private readonly List<int> registered = new List<int>();
         internal readonly List<string> Unavailable = new List<string>();
-        internal HotKeyWindow(Action attackNow, Action exit, Action skipNight, Action checkUpdate)
+        internal HotKeyWindow(Action attackNow, Action exit, Action skipNight)
         {
             this.attackNow = attackNow;
             this.exit = exit;
             this.skipNight = skipNight;
-            this.checkUpdate = checkUpdate;
             CreateParams cp = new CreateParams();
             cp.Caption = "Glukoboy.MessageOnly";
             cp.Parent = new IntPtr(-3);
@@ -625,7 +593,6 @@ namespace Bubliklyuk
             Register(17041, 3, 0x51, "Ctrl+Alt+Q");
             Register(17042, 6, 0x7B, "Ctrl+Shift+F12");
             Register(17043, 3, 0x4E, "Ctrl+Alt+N");
-            Register(17044, 3, 0x55, "Ctrl+Alt+U");
         }
         private void Register(int id, uint modifiers, uint key, string name)
         {
@@ -646,7 +613,6 @@ namespace Bubliklyuk
                     exit(); return;
                 }
                 if (id == 17043) { Diag.Info("hotkey Ctrl+Alt+N"); skipNight(); return; }
-                if (id == 17044) { Diag.Info("hotkey Ctrl+Alt+U"); checkUpdate(); return; }
             }
             base.WndProc(ref m);
         }
