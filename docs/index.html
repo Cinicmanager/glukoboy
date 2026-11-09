@@ -51,7 +51,7 @@
       <div class="section-head"><h2>Что внутри</h2></div>
       <div class="features">
         <article class="card"><p class="tag">1–3 КЛАСС</p><h3>По силам ребёнку</h3><p>В каждом классе три уровня сложности. 1 класс — «Кот мурлычет. Кто мурлычет?», 3 класс — задачи в два действия. Класс и уровень задаются в <code>settings.ini</code>, задания на чтение можно дописать в <code>tasks.txt</code>.</p></article>
-        <article class="card night"><img src="img/night_virus.webp" alt="Сонный БублиГлюк в ночном колпаке" width="520" height="520" loading="lazy"><div><h3>Ночью остываем</h3><p>С 21:00 до 07:00 — экран «ноутбук перегрелся/остывает». Время можно настроить.</p></div></article>
+        <article class="card night"><img src="img/night_virus.webp" alt="Сонный БублиГлюк в ночном колпаке" width="520" height="520" loading="lazy"><div><h3>Ночью остываем</h3><p>С 21:00 до 07:00 — экран «ноутбук перегрелся/остывает». С 07:00 до 09:00 — свободное утро: компьютер работает, атак нет, чтобы спокойно собраться в школу. Время можно настроить.</p></div></article>
         <article class="card"><p class="tag">ОБНОВЛЕНИЕ ПО ЗАПРОСУ</p><h3>Программа в интернет не ходит</h3><p>Новую версию ставит скрипт <code>Обновить.cmd</code>, когда вы его запустите. Настройки и задания сохраняются.</p></article>
       </div>
     </div></section>
@@ -65,7 +65,7 @@
       </ol>
     </div></section>
     <section id="settings"><div class="wrap install">
-      <div><h2>Настройки</h2><p>Сразу после установки стоит <strong>1 класс, уровень 1</strong> — самые лёгкие задания.</p><table class="defaults"><tbody><tr><td>Класс<small><code>Grade</code></small></td><td>1</td></tr><tr><td>Уровень внутри класса, 1–3<small><code>Level</code></small></td><td>1</td></tr><tr><td>Счёт в 1 классе до<small><code>MathMax</code></small></td><td>10</td></tr><tr><td>Атака каждые, минут<small><code>IntervalMin / IntervalMax</code></small></td><td>15–20</td></tr><tr><td>Заданий за атаку<small><code>TaskMin / TaskMax</code></small></td><td>3–4</td></tr><tr><td>Ночной режим<small><code>NightFrom / NightTo</code></small></td><td>21:00–07:00</td></tr><tr><td>Тестовый режим<small><code>TestMode</code></small></td><td>выкл</td></tr></tbody></table></div>
+      <div><h2>Настройки</h2><p>Сразу после установки стоит <strong>1 класс, уровень 1</strong> — самые лёгкие задания.</p><table class="defaults"><tbody><tr><td>Класс<small><code>Grade</code></small></td><td>1</td></tr><tr><td>Уровень внутри класса, 1–3<small><code>Level</code></small></td><td>1</td></tr><tr><td>Счёт в 1 классе до<small><code>MathMax</code></small></td><td>10</td></tr><tr><td>Атака каждые, минут<small><code>IntervalMin / IntervalMax</code></small></td><td>15–20</td></tr><tr><td>Заданий за атаку<small><code>TaskMin / TaskMax</code></small></td><td>3–4</td></tr><tr><td>Ночной режим<small><code>NightFrom / NightTo</code></small></td><td>21:00–07:00</td></tr><tr><td>Свободное утро, без атак<small><code>FreeFrom / FreeTo</code></small></td><td>07:00–09:00</td></tr><tr><td>Тестовый режим<small><code>TestMode</code></small></td><td>выкл</td></tr></tbody></table></div>
       <div><h3>Как поменять</h3><ol><li>Закройте программу: <strong>Ctrl+Alt+Q</strong>.</li><li>Откройте <code>settings.ini</code> рядом с <code>Glukoboy.exe</code> в Блокноте.</li><li>Поменяйте число после <code>=</code> и сохраните файл.</li><li>Запустите <code>Glukoboy.exe</code> снова.</li></ol><p>Пример: 2 класс, второй уровень, атака раз в 30–40 минут.</p><pre class="ini"><span>; было Grade=1</span>
 Grade=2
 <span>; было Level=1</span>

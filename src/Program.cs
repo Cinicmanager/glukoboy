@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.1.1.0")]
-[assembly: AssemblyFileVersion("1.1.1.0")]
+[assembly: AssemblyVersion("1.2.0.0")]
+[assembly: AssemblyFileVersion("1.2.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -108,6 +108,8 @@ namespace Bubliklyuk
         internal int MathMax = 10;
         internal TimeSpan NightFrom = new TimeSpan(21, 0, 0);
         internal TimeSpan NightTo = new TimeSpan(7, 0, 0);
+        internal TimeSpan FreeFrom = new TimeSpan(7, 0, 0);
+        internal TimeSpan FreeTo = new TimeSpan(9, 0, 0);
         internal bool TestMode;
 
         internal const string DefaultText =
@@ -124,8 +126,11 @@ namespace Bubliklyuk
             "MathMax=10\r\n" +
             "; Ночь по местному времени, формат ЧЧ:ММ.\r\n" +
             "NightFrom=21:00\r\nNightTo=07:00\r\n" +
+            "; Свободное утро: атак по таймеру нет, компьютер работает как обычно.\r\n" +
+            "; Одинаковое время (например 07:00 и 07:00) — выключить.\r\n" +
+            "FreeFrom=07:00\r\nFreeTo=09:00\r\n" +
             "; 1 — первая дневная атака через 10 секунд, следующие через минуту.\r\n" +
-            "; Ночной режим действует и в тестовом режиме.\r\n" +
+            "; Ночь и свободное утро действуют и в тестовом режиме.\r\n" +
             "TestMode=0\r\n";
 
         internal static string FilePath(string name)
@@ -171,6 +176,8 @@ namespace Bubliklyuk
                 s.NightFrom = new TimeSpan(21, 0, 0);
                 s.NightTo = new TimeSpan(7, 0, 0);
             }
+            s.FreeFrom = ReadTime(values, "FreeFrom", new TimeSpan(7, 0, 0));
+            s.FreeTo = ReadTime(values, "FreeTo", new TimeSpan(9, 0, 0));
             return s;
         }
         private static int ReadInt(Dictionary<string, string> values, string key, int fallback, int min, int max)
@@ -194,20 +201,29 @@ namespace Bubliklyuk
         }
     }
 
+    internal static class TimeWindow
+    {
+        internal static bool Current(TimeSpan from, TimeSpan to, DateTime now, out DateTime start, out DateTime end)
+        {
+            start = now.Date.Add(from);
+            end = now.Date.Add(to);
+            if (from == to) return false;
+            if (from > to)
+            {
+                if (now.TimeOfDay >= from) end = end.AddDays(1);
+                else if (now.TimeOfDay < to) start = start.AddDays(-1);
+                else return false;
+            }
+            else if (now.TimeOfDay < from || now.TimeOfDay >= to) return false;
+            return now >= start && now < end;
+        }
+    }
+
     internal static class NightSchedule
     {
         internal static bool Current(Settings s, DateTime now, out DateTime start, out DateTime end)
         {
-            start = now.Date.Add(s.NightFrom);
-            end = now.Date.Add(s.NightTo);
-            if (s.NightFrom > s.NightTo)
-            {
-                if (now.TimeOfDay >= s.NightFrom) end = end.AddDays(1);
-                else if (now.TimeOfDay < s.NightTo) start = start.AddDays(-1);
-                else return false;
-            }
-            else if (now.TimeOfDay < s.NightFrom || now.TimeOfDay >= s.NightTo) return false;
-            return now >= start && now < end;
+            return TimeWindow.Current(s.NightFrom, s.NightTo, now, out start, out end);
         }
         internal static DateTime NextStart(Settings s, DateTime now)
         {
@@ -283,8 +299,14 @@ namespace Bubliklyuk
             if (IsBlocked(now, out start, out end)) { EnterNight(start, end); return; }
             if (IsWarningWindow(now)) { waitingForMorning = true; return; }
             waitingForMorning = false;
-            cycleTimer.Interval = settings.TestMode ? (first ? 10000 : 60000) :
+            int interval = settings.TestMode ? (first ? 10000 : 60000) :
                 random.Next(settings.IntervalMin, settings.IntervalMax + 1) * 60000;
+            DateTime moment = now.AddMilliseconds(interval);
+            if (TimeWindow.Current(settings.FreeFrom, settings.FreeTo, now, out start, out end) ||
+                TimeWindow.Current(settings.FreeFrom, settings.FreeTo, moment, out start, out end))
+                moment = end.AddSeconds(settings.TestMode ? 60 :
+                    random.Next(settings.IntervalMin, settings.IntervalMax + 1) * 60);
+            cycleTimer.Interval = Math.Max(1000, (int)(moment - now).TotalMilliseconds);
             cycleTimer.Start();
         }
         private void OnCycle(object sender, EventArgs e)
@@ -299,8 +321,11 @@ namespace Bubliklyuk
                 {
                     CheckSchedule();
                     if (night == null && !waitingForMorning) ScheduleDay(true);
+                    DateTime freeStart, freeEnd;
                     string message = night != null ? "Глюкобой запущен. Ночной режим до " + settings.NightTo.ToString(@"hh\:mm") :
                         waitingForMorning ? "Глюкобой запущен. Скоро пора остывать." :
+                        TimeWindow.Current(settings.FreeFrom, settings.FreeTo, DateTime.Now, out freeStart, out freeEnd) ?
+                        "Глюкобой запущен. Свободное утро до " + settings.FreeTo.ToString(@"hh\:mm") + "." :
                         "Глюкобой запущен. Атака через " + (settings.TestMode ? "10 секунд." :
                         (cycleTimer.Interval / 60000).ToString(CultureInfo.InvariantCulture) + " мин.");
                     if (!waitingForMorning)
@@ -313,6 +338,15 @@ namespace Bubliklyuk
                         ShowInformation(warning + "\r\n\r\nПрограмма продолжит работу.");
                 }
                 catch (Exception ex) { Diag.Log("GameContext.OnCycle", ex); RecoverUi(ex); }
+                return;
+            }
+            DateTime now = DateTime.Now;
+            DateTime start, end;
+            if (!IsBlocked(now, out start, out end) && !IsWarningWindow(now) &&
+                TimeWindow.Current(settings.FreeFrom, settings.FreeTo, now, out start, out end))
+            {
+                Diag.Info("attack: free morning");
+                ScheduleDay(false);
                 return;
             }
             AttackNow();
