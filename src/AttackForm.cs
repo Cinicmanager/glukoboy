@@ -77,7 +77,7 @@ namespace Bubliklyuk
             this.taskCount = taskCount;
             this.failure = failure;
             idleLeave = settings.IdleLeave;
-            if (idleLeave > 0) idleFont = new Font("Segoe UI", 24, FontStyle.Regular, GraphicsUnit.Pixel);
+            if (idleLeave > 0) idleFont = new Font("Segoe UI", 32, FontStyle.Bold, GraphicsUnit.Pixel);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             DoubleBuffered = true;
@@ -373,10 +373,10 @@ namespace Bubliklyuk
             string remaining = idleLeave >= 60 && seconds >= 3600 ?
                 String.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", seconds / 3600, seconds / 60 % 60, seconds % 60) :
                 String.Format(CultureInfo.InvariantCulture, "{0:00}:{1:00}", seconds / 60, seconds % 60);
-            string text = "Не трогай ноутбук " + remaining + " — и вирус уйдёт сам";
+            string text = "Уйду сам через " + remaining;
             if (idleText == text) return;
             idleText = text;
-            Invalidate(Rectangle.Ceiling(R(64, 1000, 1792, 48)));
+            Invalidate(Rectangle.Ceiling(R(60, 974, 568, 72)));
         }
 
         private void DrawIdleCountdown(Graphics g)
@@ -387,13 +387,20 @@ namespace Bubliklyuk
             {
                 g.TranslateTransform(originX, originY);
                 g.ScaleTransform(scale, scale);
-                using (SolidBrush brush = new SolidBrush(Color.FromArgb(160, Cream)))
+                using (GraphicsPath path = Rounded(new RectangleF(64, 978, 560, 64), 18))
+                using (SolidBrush fill = new SolidBrush(Color.FromArgb(35, 40, 68)))
+                using (Pen border = new Pen(Purple, Math.Max(1.5f, 2 * scale) / scale))
+                {
+                    g.FillPath(fill, path);
+                    g.DrawPath(border, path);
+                }
+                using (SolidBrush brush = new SolidBrush(Lime))
                 using (StringFormat format = new StringFormat())
                 {
                     format.Alignment = StringAlignment.Center;
                     format.LineAlignment = StringAlignment.Center;
                     format.FormatFlags = StringFormatFlags.NoWrap;
-                    g.DrawString(idleText, idleFont, brush, new RectangleF(64, 1000, 1792, 48), format);
+                    g.DrawString(idleText, idleFont, brush, new RectangleF(80, 978, 528, 64), format);
                 }
             }
             finally { g.Restore(saved); }
