@@ -40,6 +40,7 @@ namespace Bubliklyuk
         private Font inputFont;
         private Font buttonFont;
         private Exercise exercise;
+        private Image pictureImage;
         private Stage stage;
         private string virusImage = "attack.png";
         private string phrase = "Компьютер будет моим!";
@@ -52,6 +53,11 @@ namespace Bubliklyuk
         private long appearanceStarted;
         private long phraseStarted;
         private long angryStarted = -1;
+        private long laughStarted = -1;
+        private long cardShakeStarted = -1;
+        private long starsStarted = -1;
+        private bool cardEntering;
+        private readonly List<CardStar> cardStars = new List<CardStar>();
         private long nextGlitchAt;
         private long glitchUntil;
         private int glitchSeed;
@@ -118,7 +124,7 @@ namespace Bubliklyuk
             focusTimer = new System.Windows.Forms.Timer();
             focusTimer.Interval = 500;
             focusTimer.Tick += FocusTick;
-            string[] names = new string[] { "attack.png", "angry.png", "hit.png", "defeated.png", "fon.png", "shield.png", "counter.png" };
+            string[] names = new string[] { "attack.png", "angry.png", "hit.png", "defeated.png", "fon.png", "shield.png", "counter.png", "virus_think.png", "virus_laugh.png" };
             foreach (string name in names) images[name] = LoadImage(name);
             LayoutScene();
             if (idleLeave > 0) UpdateIdleCountdown(Native.IdleTime());
@@ -212,9 +218,13 @@ namespace Bubliklyuk
         private void NewExercise()
         {
             exercise = generator.Next();
+            pictureImage = exercise.Picture == null ? null : GetImage("pic_" + exercise.Picture + ".png");
             LayoutScene();
             currentTaskIndex = completed + 1;
             cardShownAt = clock.ElapsedMilliseconds;
+            cardEntering = true;
+            laughStarted = -1;
+            cardShakeStarted = -1;
             stage = Stage.Asking;
             virusImage = "attack.png";
             angryStarted = -1;
@@ -249,6 +259,8 @@ namespace Bubliklyuk
                     virusImage = "counter.png";
                     correctStreak = 0;
                     angryStarted = clock.ElapsedMilliseconds;
+                    laughStarted = angryStarted + 500;
+                    cardShakeStarted = angryStarted;
                     SetPhrase(exercise.Kind == "math" ? "Хм. Пересчитай ещё раз" : "Хм. Прочитай ещё раз");
                     // Also fits reading exercises: the explicit prompt remains unchanged.
                     resultText = "Попробуй ещё";
@@ -262,6 +274,9 @@ namespace Bubliklyuk
                 correctStreak++;
                 impactSpawned = false;
                 long now = clock.ElapsedMilliseconds;
+                laughStarted = -1;
+                cardShakeStarted = -1;
+                SpawnCardStars(now);
                 UpdateBar(now);
                 barFrom = displayedBar;
                 barTarget = 100f * (taskCount - completed) / taskCount;
@@ -353,6 +368,28 @@ namespace Bubliklyuk
                 // regions, so the idle animation never repaints the whole screen.
                 Invalidate(Rectangle.Ceiling(R(0, 168, 686, 620)));
                 Invalidate(Rectangle.Ceiling(R(48, 788, 592, 184)));
+                if (pictureImage != null && stage != Stage.Defeated)
+                    Invalidate(Rectangle.Ceiling(R(740, exercise.LongText ? 345 : 276, 262, 266)));
+                if (cardEntering)
+                {
+                    Invalidate(Rectangle.Ceiling(R(680, 210, 1302, 752)));
+                    if (now - cardShownAt >= 300) cardEntering = false;
+                }
+                if (cardShakeStarted >= 0)
+                {
+                    Invalidate(Rectangle.Ceiling(R(666, 210, 1208, 752)));
+                    if (now - cardShakeStarted >= 400) cardShakeStarted = -1;
+                }
+                if (starsStarted >= 0)
+                {
+                    Invalidate(Rectangle.Ceiling(R(830, 288, 882, 640)));
+                    Invalidate(Rectangle.Ceiling(R(1170, 126, 202, 90)));
+                    if (now - starsStarted >= 800)
+                    {
+                        starsStarted = -1;
+                        cardStars.Clear();
+                    }
+                }
                 particles.RemoveAll(delegate(BattleParticle p) { return now - p.Born >= p.Life; });
                 if (stage == Stage.Hit)
                     Invalidate(Rectangle.Ceiling(R(636, 300, 120, 370)));
@@ -439,9 +476,13 @@ namespace Bubliklyuk
                 DrawCover(g, GetImage("fon.png"));
                 long now = clock.ElapsedMilliseconds;
                 DrawProgress(g, now);
+                float cardOffset = CardOffsetX(now) * scale;
+                GraphicsState cardBackground = g.Save();
+                g.TranslateTransform(cardOffset, 0);
                 RectangleF card = R(686, 216, 1170, 740);
                 using (GraphicsPath path = Rounded(card, 30 * scale))
                 using (SolidBrush brush = new SolidBrush(Cream)) g.FillPath(brush, path);
+                g.Restore(cardBackground);
 
                 RectangleF field = R(791, AnswerRowY, 620, 112);
                 using (GraphicsPath path = Rounded(field, 22 * scale))
@@ -452,6 +493,8 @@ namespace Bubliklyuk
                     g.DrawPath(border, path);
                 }
 
+                GraphicsState cardText = g.Save();
+                g.TranslateTransform(cardOffset, 0);
                 DrawExercise(g, now);
                 Color resultColor = wrongAnswer ? Color.FromArgb(122, 54, 128) : Color.FromArgb(24, 103, 86);
                 bool longCard = exercise != null && exercise.LongText;
@@ -459,6 +502,8 @@ namespace Bubliklyuk
                     R(766, longCard ? 800 : 712, 1010, 64), true);
                 DrawText(g, "Введи ответ → Enter", 28, FontStyle.Regular, Ink,
                     R(766, longCard ? 884 : 808, 1010, longCard ? 48 : 64), true);
+                g.Restore(cardText);
+                DrawCardCelebration(g, now);
                 DrawWave(g, now);
                 DrawVirus(g, now);
                 DrawCombat(g, now);
@@ -516,6 +561,10 @@ namespace Bubliklyuk
             try
             {
                 g.TranslateTransform(0, 12 * scale * (1 - reveal));
+                float shift = pictureImage == null ? 0 : GradedReadingBank.PictureSize + GradedReadingBank.PictureGap;
+                float textX = 766 + shift;
+                float textWidth = GradedReadingBank.TextWidth - shift;
+                if (stage != Stage.Defeated) DrawPicture(g, now);
                 if (stage == Stage.Defeated)
                 {
                     DrawText(g, "Компьютер защищён!", 34, FontStyle.Bold, Ink, R(766, 300, 1010, 80), true);
@@ -523,18 +572,111 @@ namespace Bubliklyuk
                 }
                 else if (exercise != null && exercise.LongText)
                 {
-                    DrawParagraph(g, exercise.Text, Math.Max(24, 36 * scale), ink, R(766, 300, 1010, 232));
-                    DrawParagraph(g, exercise.Question, Math.Max(24, 34 * scale), ink, R(766, 548, 1010, 96));
+                    DrawParagraph(g, exercise.Text, Math.Max(24, 36 * scale), ink, R(textX, 300, textWidth, 232));
+                    DrawParagraph(g, exercise.Question, Math.Max(24, 34 * scale), ink, R(textX, 548, textWidth, 96));
                 }
                 else if (exercise != null)
                 {
-                    DrawText(g, exercise.Instruction, 34, FontStyle.Bold, ink, R(766, 294, 1010, 72), true);
+                    DrawText(g, exercise.Instruction, 34, FontStyle.Bold, ink, R(textX, 294, textWidth, 72), true);
                     // Four syllables must also fit on a 1366x768 laptop.
                     float size = exercise.Kind == "syllables" ? 56 : 78;
-                    DrawText(g, exercise.Text, size, FontStyle.Bold, ink, R(766, 384, 1010, 128), true, 84);
+                    DrawText(g, exercise.Text, size, FontStyle.Bold, ink, R(textX, 384, textWidth, 128), true, 84);
                 }
             }
             finally { g.Restore(saved); }
+        }
+
+        private float CardOffsetX(long now)
+        {
+            float offset = 0;
+            if (exercise != null && stage != Stage.Defeated)
+            {
+                float remaining = 1 - Unit((now - cardShownAt) / 300f);
+                offset = 120 * remaining * remaining * remaining;
+            }
+            if (cardShakeStarted >= 0)
+            {
+                float t = Unit((now - cardShakeStarted) / 400f);
+                offset += 14 * (1 - t) * (float)Math.Sin(6 * Math.PI * t);
+            }
+            return offset;
+        }
+
+        private void DrawPicture(Graphics g, long now)
+        {
+            if (pictureImage == null) return;
+            float size = GradedReadingBank.PictureSize;
+            float top = exercise.LongText ? 367 : 298;
+            float wave = (float)Math.Sin(now * Math.PI * 2 / 2400.0);
+            GraphicsState saved = g.Save();
+            try
+            {
+                g.TranslateTransform(originX + (766 + size / 2) * scale,
+                    originY + (top + size / 2 + 5 * wave) * scale);
+                g.RotateTransform(3 * wave);
+                float ratio = Math.Min(size / pictureImage.Width, size / pictureImage.Height) * scale;
+                float width = pictureImage.Width * ratio;
+                float height = pictureImage.Height * ratio;
+                g.DrawImage(pictureImage, -width / 2, -height / 2, width, height);
+            }
+            finally { g.Restore(saved); }
+        }
+
+        private void SpawnCardStars(long now)
+        {
+            starsStarted = now;
+            cardStars.Clear();
+            for (int i = 0; i < 16; i++)
+            {
+                double angle = Math.PI * 2 * i / 16 + (random.NextDouble() - 0.5) * 0.2;
+                float speed = random.Next(330, 521);
+                CardStar star = new CardStar();
+                star.VX = (float)Math.Cos(angle) * speed;
+                star.VY = (float)Math.Sin(angle) * speed * 0.65f;
+                star.Size = random.Next(8, 15);
+                star.Angle = random.Next(360);
+                cardStars.Add(star);
+            }
+        }
+
+        private void DrawCardCelebration(Graphics g, long now)
+        {
+            if (starsStarted < 0) return;
+            float fraction = Unit((now - starsStarted) / 800f);
+            float seconds = fraction * 0.8f;
+            int alpha = (int)(255 * (1 - fraction));
+            if (alpha <= 0) return;
+            for (int i = 0; i < cardStars.Count; i++)
+            {
+                CardStar star = cardStars[i];
+                float x = 1271 + star.VX * seconds;
+                float y = 586 + star.VY * seconds + 80 * seconds * seconds;
+                PointF[] points = new PointF[10];
+                for (int point = 0; point < points.Length; point++)
+                {
+                    double angle = (star.Angle + fraction * 150 - 90) * Math.PI / 180 + point * Math.PI / 5;
+                    float radius = star.Size * (point % 2 == 0 ? 1 : 0.42f);
+                    points[point] = R(x + radius * (float)Math.Cos(angle),
+                        y + radius * (float)Math.Sin(angle), 0, 0).Location;
+                }
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(alpha, i % 2 == 0 ? Yellow : Lime)))
+                    g.FillPolygon(brush, points);
+            }
+            if (buttonFont != null)
+            {
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(alpha, Lime)))
+                using (StringFormat format = new StringFormat())
+                {
+                    format.Alignment = StringAlignment.Center;
+                    format.LineAlignment = StringAlignment.Center;
+                    g.DrawString("+1", buttonFont, brush, R(1181, 160 - 24 * fraction, 180, 48), format);
+                }
+            }
+        }
+
+        private sealed class CardStar
+        {
+            internal float VX, VY, Size, Angle;
         }
 
         private static void DrawParagraph(Graphics g, string text, float pixels, Color color, RectangleF box)
@@ -611,6 +753,12 @@ namespace Bubliklyuk
                 opacity = 1 - eased;
             }
 
+            if (stage == Stage.Asking && angryStarted < 0 && laughStarted >= 0 &&
+                now >= laughStarted && now - laughStarted < 1200)
+            {
+                centerY -= 14 * scale * (float)Math.Abs(Math.Sin((now - laughStarted) * Math.PI * 2 / 1200.0));
+            }
+
             float entrance = Unit((now - appearanceStarted) / 600f);
             if (entrance < 1)
             {
@@ -676,7 +824,15 @@ namespace Bubliklyuk
 
         private void DrawCharacter(Graphics g, RectangleF box, float opacity, float flash, bool glitch, long now)
         {
-            Image image = GetImage(virusImage);
+            string name = virusImage;
+            if (stage == Stage.Asking && angryStarted < 0)
+            {
+                if (laughStarted >= 0 && now >= laughStarted && now - laughStarted < 1200)
+                    name = "virus_laugh.png";
+                else if (answer.Text.Length > 0)
+                    name = "virus_think.png";
+            }
+            Image image = GetImage(name) ?? GetImage(virusImage);
             if (image == null)
             {
                 using (SolidBrush brush = new SolidBrush(Color.FromArgb((int)(255 * opacity), Purple)))
@@ -976,7 +1132,12 @@ namespace Bubliklyuk
         private Image GetImage(string name)
         {
             Image image;
-            return images.TryGetValue(name, out image) ? image : null;
+            if (!images.TryGetValue(name, out image))
+            {
+                image = LoadImage(name);
+                images[name] = image;
+            }
+            return image;
         }
 
         private static Image LoadImage(string name)

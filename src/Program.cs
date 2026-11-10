@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.4.1.0")]
-[assembly: AssemblyFileVersion("1.4.1.0")]
+[assembly: AssemblyVersion("1.5.0.0")]
+[assembly: AssemblyFileVersion("1.5.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -125,6 +125,7 @@ namespace Bubliklyuk
             "; Grade — класс 1..3. Задания 2–3 класса включаются здесь.\r\n" +
             "Grade=1\r\n" +
             "; Level — уровень 1..3 внутри выбранного класса. Родитель повышает вручную.\r\n" +
+            "; Для 1 класса Level = четверть: 1 — начало года, 2 — вторая четверть (короткие слова и картинки), 3 — третья и дальше.\r\n" +
             "Level=1\r\n" +
             "; MathMax действует только в 1 классе, от 3 до 10; шаги 1–3.\r\n" +
             "MathMax=10\r\n" +

@@ -12,6 +12,10 @@ namespace Bubliklyuk
     {
         private readonly List<GradedCard>[,] cards = new List<GradedCard>[3, 3];
         internal string Warning = "";
+        // Shared scene geometry for validation and drawing.
+        internal const float TextWidth = 1010;
+        internal const float PictureSize = 210;
+        internal const float PictureGap = 28;
 
         private GradedReadingBank()
         {
@@ -19,7 +23,6 @@ namespace Bubliklyuk
                 for (int level = 0; level < 3; level++)
                     cards[grade, level] = new List<GradedCard>();
         }
-
         internal List<GradedCard> Get(int grade, int level)
         {
             if (grade < 1 || grade > 3 || level < 1 || level > 3)
@@ -27,16 +30,37 @@ namespace Bubliklyuk
             return new List<GradedCard>(cards[grade - 1, level - 1]);
         }
 
+        private const int BankVersion = 2;
+
         internal static GradedReadingBank Load()
         {
-            GradedReadingBank builtIn = Parse(DefaultReadingData.Text);
+            string defaultText = VersionedText(DefaultReadingData.Text);
+            GradedReadingBank builtIn = Parse(defaultText);
             string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "tasks.txt");
             GradedReadingBank external;
             try
             {
+                string text;
                 if (!File.Exists(path))
-                    File.WriteAllText(path, DefaultReadingData.Text, new UTF8Encoding(false));
-                external = Parse(File.ReadAllText(path, new UTF8Encoding(false, true)));
+                {
+                    File.WriteAllText(path, defaultText, new UTF8Encoding(false));
+                    text = defaultText;
+                }
+                else
+                {
+                    text = File.ReadAllText(path, new UTF8Encoding(false, true));
+                    if (!CurrentBank(text))
+                    {
+                        string oldName = "tasks.old-" + DateTime.Now.ToString("yyyyMMdd-HHmmss",
+                            CultureInfo.InvariantCulture) + ".txt";
+                        string oldPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, oldName);
+                        File.Move(path, oldPath);
+                        File.WriteAllText(path, defaultText, new UTF8Encoding(false));
+                        Diag.Info("tasks: bank updated, old saved as " + oldName);
+                        text = defaultText;
+                    }
+                }
+                external = Parse(text);
             }
             catch
             {
@@ -48,6 +72,51 @@ namespace Bubliklyuk
                     if (external.cards[grade, level].Count == 0)
                         external.cards[grade, level].AddRange(builtIn.cards[grade, level]);
             return external;
+        }
+
+        private static bool CurrentBank(string text)
+        {
+            using (StringReader reader = new StringReader(text))
+            {
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    line = line.Trim().TrimStart('\uFEFF');
+                    int version;
+                    if (line.StartsWith("# bank=", StringComparison.Ordinal) &&
+                        Int32.TryParse(line.Substring(7), NumberStyles.None,
+                            CultureInfo.InvariantCulture, out version) && version >= BankVersion)
+                        return true;
+                }
+            }
+            return false;
+        }
+
+        // DefaultReadingData is supplied separately. Ensure its exported bank has
+        // exactly one version service line, immediately after the header.
+        private static string VersionedText(string text)
+        {
+            StringBuilder result = new StringBuilder();
+            using (StringReader reader = new StringReader(text))
+            {
+                string header = reader.ReadLine();
+                if (header != null) result.AppendLine(header.TrimStart('\uFEFF'));
+                result.AppendLine("# bank=" + BankVersion.ToString(CultureInfo.InvariantCulture));
+                string line;
+                while ((line = reader.ReadLine()) != null)
+                {
+                    if (!line.Trim().StartsWith("# bank=", StringComparison.Ordinal)) result.AppendLine(line);
+                }
+            }
+            return result.ToString();
+        }
+
+        internal static bool ValidPicture(string picture)
+        {
+            if (String.IsNullOrEmpty(picture)) return true;
+            if (picture.Length > 16) return false;
+            foreach (char c in picture) if (c < 'a' || c > 'z') return false;
+            return true;
         }
 
         private static GradedReadingBank Parse(string text)
@@ -63,7 +132,7 @@ namespace Bubliklyuk
                     line = line.Trim().TrimStart('\uFEFF');
                     if (line.Length == 0 || line.StartsWith("#", StringComparison.Ordinal)) continue;
                     string[] fields = line.Split(';');
-                    if (fields.Length != 6 && fields.Length != 7) { errors++; continue; }
+                    if (fields.Length != 6 && fields.Length != 7 && fields.Length != 8) { errors++; continue; }
                     for (int i = 0; i < fields.Length; i++) fields[i] = fields[i].Trim();
                     bool legacy = fields.Length == 6;
                     int grade = 1;
@@ -80,14 +149,14 @@ namespace Bubliklyuk
                     string body = fields[3 + offset];
                     string question = fields[4 + offset];
                     string answers = fields[5 + offset];
+                    string picture = fields.Length == 8 && fields[7].Length > 0 ? fields[7] : null;
                     if (type.Length == 0 || body.Length == 0 || body.Length > 400 ||
                         question.Length == 0 || question.Length > 100 ||
-                        answers.Length == 0 || answers.Length > 250 || !Fits(body, question))
+                        answers.Length == 0 || answers.Length > 250 || !ValidPicture(picture) ||
+                        !Fits(body, question, picture != null))
                     { errors++; continue; }
                     string[] variants = answers.Split('|');
-                    bool numeric = true;
-                    bool words = true;
-                    bool valid = true;
+                    bool numeric = true, words = true, valid = true;
                     foreach (string raw in variants)
                     {
                         string answer = Normalize(raw);
@@ -102,9 +171,8 @@ namespace Bubliklyuk
                         words = words && isWord;
                     }
                     if (!valid || (!numeric && !words)) { errors++; continue; }
-                    // Для обоих форматов type остаётся подтипом чтения: who, fact и т.д.
                     bank.cards[grade - 1, level - 1].Add(
-                        new GradedCard("reading", "Прочитай", body, question, answers, numeric));
+                        new GradedCard("reading", "Прочитай", body, question, answers, numeric, picture));
                     ids.Add(fields[0]);
                 }
             }
@@ -118,18 +186,17 @@ namespace Bubliklyuk
         {
             return (value ?? "").Trim().ToLowerInvariant().Replace('ё', 'е');
         }
-
         internal static float MinimumTextPixels()
         {
             float scale = Math.Min(Screen.PrimaryScreen.Bounds.Width / 1920f,
                 Screen.PrimaryScreen.Bounds.Height / 1080f);
             return Math.Max(20, 22 * scale);
         }
-
-        private static bool Fits(string body, string question)
+        private static bool Fits(string body, string question, bool picture)
         {
             float scale = Math.Min(Screen.PrimaryScreen.Bounds.Width / 1920f,
                 Screen.PrimaryScreen.Bounds.Height / 1080f);
+            float width = (TextWidth - (picture ? PictureSize + PictureGap : 0)) * scale;
             using (Bitmap bitmap = new Bitmap(1, 1))
             using (Graphics graphics = Graphics.FromImage(bitmap))
             using (Font font = new Font("Segoe UI", MinimumTextPixels(), FontStyle.Bold, GraphicsUnit.Pixel))
@@ -137,13 +204,12 @@ namespace Bubliklyuk
             {
                 format.Alignment = StringAlignment.Center;
                 format.LineAlignment = StringAlignment.Center;
-                SizeF textSize = graphics.MeasureString(body, font, new SizeF(1010 * scale, 10000), format);
-                SizeF questionSize = graphics.MeasureString(question, font, new SizeF(1010 * scale, 10000), format);
-                return textSize.Height <= 232 * scale && textSize.Width <= 1010 * scale + 1 &&
-                    questionSize.Height <= 96 * scale && questionSize.Width <= 1010 * scale + 1;
+                SizeF textSize = graphics.MeasureString(body, font, new SizeF(width, 10000), format);
+                SizeF questionSize = graphics.MeasureString(question, font, new SizeF(width, 10000), format);
+                return textSize.Height <= 232 * scale && textSize.Width <= width + 1 &&
+                    questionSize.Height <= 96 * scale && questionSize.Width <= width + 1;
             }
         }
-
         internal static bool Matches(GradedCard card, string input)
         {
             string actual = Normalize(input);
@@ -157,8 +223,7 @@ namespace Bubliklyuk
                 {
                     int expected;
                     if (Int32.TryParse(Normalize(answer), NumberStyles.None,
-                        CultureInfo.InvariantCulture, out expected) && expected == number)
-                        return true;
+                        CultureInfo.InvariantCulture, out expected) && expected == number) return true;
                 }
                 return false;
             }
@@ -170,9 +235,7 @@ namespace Bubliklyuk
 
     internal sealed class GradedGenerator
     {
-        private readonly int grade;
-        private readonly int level;
-        private readonly int mathMax;
+        private readonly int grade, level, mathMax;
         private readonly GradedReadingBank reading;
         private readonly Random random = new Random();
         private readonly Queue<string> recent = new Queue<string>();
@@ -181,19 +244,15 @@ namespace Bubliklyuk
             new Dictionary<string, Queue<GradedCard>>(StringComparer.Ordinal);
         private string previous = "";
         private int russianIndex;
-
         internal GradedGenerator(int grade, int level, int mathMax, GradedReadingBank reading)
         {
-            this.grade = grade; this.level = level; this.mathMax = mathMax;
-            this.reading = reading;
+            this.grade = grade; this.level = level; this.mathMax = mathMax; this.reading = reading;
         }
-
         internal void BeginAttack(int count)
         {
             string[] order = count == 4
                 ? new string[] { "reading", "russian", "reading", "math" }
                 : new string[] { "reading", "russian", "math" };
-            // Перебор перестановок гарантирует отсутствие одинаковых соседних категорий.
             List<string[]> choices = new List<string[]>();
             Permutations(order, 0, choices);
             List<string[]> preferred = new List<string[]>();
@@ -204,13 +263,11 @@ namespace Bubliklyuk
             mix.Clear();
             foreach (string kind in selected) mix.Enqueue(kind);
         }
-
         private static void Permutations(string[] values, int index, List<string[]> results)
         {
             if (index == values.Length)
             {
-                for (int i = 1; i < values.Length; i++)
-                    if (values[i] == values[i - 1]) return;
+                for (int i = 1; i < values.Length; i++) if (values[i] == values[i - 1]) return;
                 results.Add((string[])values.Clone());
                 return;
             }
@@ -223,7 +280,6 @@ namespace Bubliklyuk
                 saved = values[index]; values[index] = values[i]; values[i] = saved;
             }
         }
-
         internal GradedCard Next()
         {
             if (mix.Count == 0) BeginAttack(3);
@@ -233,8 +289,8 @@ namespace Bubliklyuk
             else if (kind == "russian")
             {
                 string type;
-                if (grade == 1 || (grade == 2 && level == 1)) type = "syll";
-                else if (grade == 2) type = russianIndex++ % 2 == 0 ? "syll" : "odd";
+                if ((grade == 1 || grade == 2) && level == 1) type = "syll";
+                else if (grade <= 2) type = russianIndex++ % 2 == 0 ? "syll" : "odd";
                 else
                 {
                     string[] types = new string[] { "odd", "count", "syll" };
@@ -256,7 +312,6 @@ namespace Bubliklyuk
             while (recent.Count > 12) recent.Dequeue();
             return card;
         }
-
         private GradedCard Draw(string key, List<GradedCard> source)
         {
             Queue<GradedCard> deck;
@@ -268,11 +323,9 @@ namespace Bubliklyuk
                     int j = random.Next(i + 1);
                     GradedCard saved = source[i]; source[i] = source[j]; source[j] = saved;
                 }
-                // Уже показанные недавно карточки идут в конец колоды.
                 List<GradedCard> ordered = source.FindAll(
                     delegate(GradedCard item) { return !recent.Contains(item.Key); });
-                ordered.AddRange(source.FindAll(
-                    delegate(GradedCard item) { return recent.Contains(item.Key); }));
+                ordered.AddRange(source.FindAll(delegate(GradedCard item) { return recent.Contains(item.Key); }));
                 deck = new Queue<GradedCard>(ordered);
                 decks[key] = deck;
             }

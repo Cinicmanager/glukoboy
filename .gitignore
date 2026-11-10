@@ -8,3 +8,4 @@ school-state.txt
 /settings.ini
 /tasks.txt
 errors.log
+tasks.old-*.txt

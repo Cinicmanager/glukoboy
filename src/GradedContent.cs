@@ -5,22 +5,17 @@ using System.Text;
 
 namespace Bubliklyuk
 {
-    // Каталог второго задания по русскому и математические шаблоны v5.
-    // Чтение хранится в DefaultReadingData; эти задания формируются локально.
     internal sealed class GradedCard
     {
-        internal readonly string Type;
-        internal readonly string Instruction;
-        internal readonly string Text;
-        internal readonly string Question;
-        internal readonly string Answers;
+        internal readonly string Type, Instruction, Text, Question, Answers, Picture;
         internal readonly bool Numeric;
 
         internal GradedCard(string type, string instruction, string text, string question,
-            string answers, bool numeric)
+            string answers, bool numeric, string picture = null)
         {
             Type = type; Instruction = instruction; Text = text;
             Question = question; Answers = answers; Numeric = numeric;
+            Picture = String.IsNullOrEmpty(picture) ? null : picture;
         }
 
         internal string Key { get { return Type + "|" + Text + "|" + Question; } }
@@ -28,21 +23,25 @@ namespace Bubliklyuk
 
     internal static class GradedContent
     {
-        // grade;level;слово;слоги. Каждый уровень имеет свой список.
+        // grade;level;слово;слоги;необязательный ключ картинки.
         private const string SyllableData =
             "1;1;мама;ма + ма\n1;1;папа;па + па\n1;1;рыба;ры + ба\n" +
             "1;1;коза;ко + за\n1;1;лиса;ли + са\n1;1;рука;ру + ка\n" +
             "1;1;луна;лу + на\n1;1;рама;ра + ма\n1;1;сани;са + ни\n" +
             "1;1;нора;но + ра\n1;1;мыло;мы + ло\n1;1;каша;ка + ша\n" +
             "1;1;роза;ро + за\n1;1;зима;зи + ма\n1;1;лето;ле + то\n1;1;пила;пи + ла\n" +
-            "1;2;молодец;мо + ло + дец\n1;2;собака;со + ба + ка\n" +
-            "1;2;барабан;ба + ра + бан\n1;2;молоко;мо + ло + ко\n" +
-            "1;2;ворона;во + ро + на\n1;2;корова;ко + ро + ва\n" +
-            "1;2;сорока;со + ро + ка\n1;2;машина;ма + ши + на\n" +
-            "1;2;берёза;бе + рё + за\n1;2;малина;ма + ли + на\n" +
-            "1;2;ракета;ра + ке + та\n1;2;лопата;ло + па + та\n" +
-            "1;2;осина;о + си + на\n1;2;самолёт;са + мо + лёт\n" +
-            "1;2;петушок;пе + ту + шок\n1;2;пироги;пи + ро + ги\n" +
+            "1;2;лиса;ли + са;lisa\n1;2;сова;со + ва;sova\n" +
+            "1;2;рыба;ры + ба;ryba\n1;2;роза;ро + за;roza\n" +
+            "1;2;луна;лу + на;luna\n1;2;коза;ко + за;koza\n" +
+            "1;2;ваза;ва + за;vaza\n1;2;пила;пи + ла;pila\n" +
+            "1;2;оса;о + са;osa\n1;2;утка;у + тка;utka\n" +
+            "1;2;кукла;ку + кла;kukla\n1;2;миска;ми + ска;miska\n" +
+            "1;2;лодка;ло + дка;lodka\n1;2;мама;ма + ма;\n" +
+            "1;2;папа;па + па;\n1;2;рама;ра + ма;\n1;2;каша;ка + ша;\n" +
+            "1;2;вата;ва + та;\n1;2;рука;ру + ка;\n1;2;нога;но + га;\n" +
+            "1;2;губа;гу + ба;\n1;2;коса;ко + са;\n1;2;лужа;лу + жа;\n" +
+            "1;2;муха;му + ха;\n1;2;дыра;ды + ра;\n1;2;нора;но + ра;\n" +
+            "1;2;море;мо + ре;\n1;2;поле;по + ле;\n1;2;лето;ле + то;\n1;2;сани;са + ни;\n" +
             "1;3;молодец;мо + ло + дец\n1;3;собака;со + ба + ка\n" +
             "1;3;барабан;ба + ра + бан\n1;3;молоко;мо + ло + ко\n" +
             "1;3;ворона;во + ро + на\n1;3;корова;ко + ро + ва\n" +
@@ -51,10 +50,6 @@ namespace Bubliklyuk
             "1;3;ракета;ра + ке + та\n1;3;лопата;ло + па + та\n" +
             "1;3;осина;о + си + на\n1;3;самолёт;са + мо + лёт\n" +
             "1;3;петушок;пе + ту + шок\n1;3;пироги;пи + ро + ги\n" +
-            "1;3;черепаха;че + ре + па + ха\n1;3;паутина;па + у + ти + на\n" +
-            "1;3;кукуруза;ку + ку + ру + за\n1;3;балерина;ба + ле + ри + на\n" +
-            "1;3;пирамида;пи + ра + ми + да\n1;3;рукавица;ру + ка + ви + ца\n" +
-            "1;3;гусеница;гу + се + ни + ца\n1;3;карусели;ка + ру + се + ли\n" +
             "2;1;берёза;бе + рё + за\n2;1;машина;ма + ши + на\n" +
             "2;1;самолёт;са + мо + лёт\n2;1;молодец;мо + ло + дец\n" +
             "2;1;черепаха;че + ре + па + ха\n2;1;кукуруза;ку + ку + ру + за\n" +
@@ -83,6 +78,27 @@ namespace Bubliklyuk
             "3;3;путешествие;пу + те + ше + стви + е\n3;3;объявление;объ + яв + ле + ни + е\n" +
             "3;3;удивление;у + ди + вле + ни + е\n3;3;водопроводчик;во + до + про + вод + чик\n";
 
+        private const string FirstGradeOdd =
+            "Что не еда?;сыр, суп, хлеб, зонт;зонт\n" +
+            "Что не еда?;мяч, каша, торт, рис;мяч\n" +
+            "Что не еда?;лук, шар, груша, рыба;шар\n" +
+            "Что не еда?;банан, слива, ваза, сыр;ваза\n" +
+            "Что не еда?;пила, хлеб, репа, каша;пила\n" +
+            "Что не еда?;рис, суп, торт, лодка;лодка\n" +
+            "Что не еда?;рыба, кукла, лук, банан;кукла\n" +
+            "Что не еда?;репа, груша, шапка, слива;шапка\n" +
+            "Что не еда?;сумка, сыр, рис, хлеб;сумка\n" +
+            "Что не еда?;каша, торт, суп, стул;стул\n" +
+            "Что не плод?;банан, груша, слива, нож;нож\n" +
+            "Что не плод?;мяч, лимон, банан, груша;мяч\n" +
+            "Что не плод?;слива, шар, лимон, банан;шар\n" +
+            "Что не плод?;груша, слива, зонт, лимон;зонт\n" +
+            "Что не плод?;банан, лимон, груша, ваза;ваза\n" +
+            "Что не имя?;Рома, Нина, Мила, мяч;мяч\n" +
+            "Что не имя?;суп, Вера, Коля, Лиза;суп\n" +
+            "Что не имя?;Дима, зонт, Оля, Петя;зонт\n" +
+            "Что не имя?;Таня, Рома, хлеб, Нина;хлеб\n" +
+            "Что не имя?;Мила, Вера, Коля, сыр;сыр\n";
         // Семантическая категория названа явно: ответ остаётся однозначным.
         private const string SemanticOdd =
             "Найди слово, которое не называет животное.;кот, пёс, стол, мышь;стол\n" +
@@ -124,12 +140,14 @@ namespace Bubliklyuk
                     string[] p = line.Split(';');
                     if (Int32.Parse(p[0], CultureInfo.InvariantCulture) != grade ||
                         Int32.Parse(p[1], CultureInfo.InvariantCulture) != level) continue;
-                    result.Add(new GradedCard("syll", "Собери слово", p[3], "", p[2], false));
+                    string picture = p.Length > 4 ? p[4].Trim() : null;
+                    if (!GradedReadingBank.ValidPicture(picture)) continue;
+                    result.Add(new GradedCard("syll", "Собери слово", p[3], "", p[2], false, picture));
                 }
             }
-            else if (type == "odd" && grade >= 2)
+            else if (type == "odd" && (grade >= 2 || (grade == 1 && level >= 2)))
             {
-                string data = grade == 2 ? SemanticOdd : GrammarOdd;
+                string data = grade == 1 ? FirstGradeOdd : grade == 2 ? SemanticOdd : GrammarOdd;
                 foreach (string line in data.Split('\n'))
                 {
                     if (line.Length == 0) continue;
@@ -162,15 +180,11 @@ namespace Bubliklyuk
                     bool plus = random.Next(2) == 0;
                     if (plus)
                     {
-                        a = random.Next(3, 10);
-                        b = random.Next(11 - a, 10);
-                        answer = a + b;
+                        a = random.Next(3, 10); b = random.Next(11 - a, 10); answer = a + b;
                     }
                     else
                     {
-                        a = random.Next(11, 19);
-                        b = random.Next(a - 9, 10);
-                        answer = a - b;
+                        a = random.Next(11, 19); b = random.Next(a - 9, 10); answer = a - b;
                     }
                     return Arithmetic(a, b, plus ? "+" : "−", answer);
                 }
@@ -221,8 +235,7 @@ namespace Bubliklyuk
                 }
                 int factor = random.Next(2, level == 1 ? 6 : 10);
                 int other = random.Next(2, 10);
-                if (random.Next(2) == 0)
-                    return Arithmetic(factor * other, factor, ":", other);
+                if (random.Next(2) == 0) return Arithmetic(factor * other, factor, ":", other);
                 return Arithmetic(other, factor, "×", other * factor);
             }
             int kind = random.Next(4);
@@ -233,8 +246,7 @@ namespace Bubliklyuk
             }
             if (kind == 1)
             {
-                int groups = random.Next(2, 10);
-                int each = random.Next(3, 13);
+                int groups = random.Next(2, 10), each = random.Next(3, 13);
                 int taken = random.Next(1, each);
                 return NumericStory("В " + groups + " коробках по " + each +
                     " " + Form(each, "мелок", "мелка", "мелков") + ". Дети взяли " + taken +
@@ -243,8 +255,7 @@ namespace Bubliklyuk
             }
             if (kind == 2)
             {
-                int first = 10 * random.Next(11, 40);
-                int second = 10 * random.Next(2, 20);
+                int first = 10 * random.Next(11, 40), second = 10 * random.Next(2, 20);
                 int spent = 10 * random.Next(1, 11);
                 return NumericStory("В магазин привезли " + first + " " +
                     Form(first, "тетрадь", "тетради", "тетрадей") + ", затем ещё " +
@@ -269,7 +280,6 @@ namespace Bubliklyuk
             int answer = plus ? a + step : a - step;
             if (level >= 2 && random.Next(4) == 0)
             {
-                // Числительные с окончаниями позволяют читать задачу без догадок.
                 if (plus)
                     return NumericStory("У Веры " + a + " " + Form(a, "мяч", "мяча", "мячей") +
                         ". Ей дали ещё " + step + ".", "Сколько мячей стало?", answer);
@@ -278,37 +288,28 @@ namespace Bubliklyuk
             }
             string sign = plus ? "+" : "−";
             int variant = random.Next(3);
-            if (variant == 1)
-                return Number("Какое число пропущено?", a + " " + sign + " □ = " + answer, step);
-            if (variant == 2)
-                return Number("Какое число пропущено?", "□ " + sign + " " + step + " = " + answer, a);
+            if (variant == 1) return Number("Какое число пропущено?", a + " " + sign + " □ = " + answer, step);
+            if (variant == 2) return Number("Какое число пропущено?", "□ " + sign + " " + step + " = " + answer, a);
             return Arithmetic(a, step, sign, answer);
         }
 
         private static GradedCard GroupsStory(int each, int count)
         {
             return NumericStory("На " + count + " тарелках по " + each + " " +
-                Form(each, "яблоко", "яблока", "яблок") + ".",
-                "Сколько всего яблок?", each * count);
+                Form(each, "яблоко", "яблока", "яблок") + ".", "Сколько всего яблок?", each * count);
         }
-
         private static GradedCard Arithmetic(int a, int b, string sign, int answer)
         {
             return Number("Реши пример", a + " " + sign + " " + b + " = □", answer);
         }
-
         private static GradedCard Number(string instruction, string text, int answer)
         {
-            return new GradedCard("math", instruction, text, "",
-                answer.ToString(CultureInfo.InvariantCulture), true);
+            return new GradedCard("math", instruction, text, "", answer.ToString(CultureInfo.InvariantCulture), true);
         }
-
         private static GradedCard NumericStory(string text, string question, int answer)
         {
-            return new GradedCard("math", "Прочитай и реши", text, question,
-                answer.ToString(CultureInfo.InvariantCulture), true);
+            return new GradedCard("math", "Прочитай и реши", text, question, answer.ToString(CultureInfo.InvariantCulture), true);
         }
-
         private static string Form(int number, string one, string few, string many)
         {
             if (number % 100 >= 11 && number % 100 <= 14) return many;
