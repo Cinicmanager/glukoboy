@@ -5,6 +5,7 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Drawing.Text;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Windows.Forms;
@@ -33,6 +34,9 @@ namespace Bubliklyuk
         private readonly System.Windows.Forms.Timer focusTimer;
         private readonly Stopwatch clock = Stopwatch.StartNew();
         private readonly Random random = new Random();
+        private readonly int idleLeave;
+        private Font idleFont;
+        private string idleText = "";
         private Font inputFont;
         private Font buttonFont;
         private Exercise exercise;
@@ -72,6 +76,8 @@ namespace Bubliklyuk
             this.generator = generator;
             this.taskCount = taskCount;
             this.failure = failure;
+            idleLeave = settings.IdleLeave;
+            if (idleLeave > 0) idleFont = new Font("Segoe UI", 24, FontStyle.Regular, GraphicsUnit.Pixel);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             DoubleBuffered = true;
@@ -115,6 +121,7 @@ namespace Bubliklyuk
             string[] names = new string[] { "attack.png", "angry.png", "hit.png", "defeated.png", "fon.png", "shield.png", "counter.png" };
             foreach (string name in names) images[name] = LoadImage(name);
             LayoutScene();
+            if (idleLeave > 0) UpdateIdleCountdown(Native.IdleTime());
         }
 
         protected override void OnShown(EventArgs e)
@@ -359,6 +366,39 @@ namespace Bubliklyuk
             catch (Exception ex) { Diag.Log("AttackForm.AnimationTick", ex); Fail(ex); }
         }
 
+        internal void UpdateIdleCountdown(TimeSpan idle)
+        {
+            if (stopping || idleLeave <= 0) return;
+            int seconds = (int)Math.Ceiling(Math.Max(0, idleLeave * 60.0 - idle.TotalSeconds));
+            string remaining = idleLeave >= 60 && seconds >= 3600 ?
+                String.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", seconds / 3600, seconds / 60 % 60, seconds % 60) :
+                String.Format(CultureInfo.InvariantCulture, "{0:00}:{1:00}", seconds / 60, seconds % 60);
+            string text = "Не трогай ноутбук " + remaining + " — и вирус уйдёт сам";
+            if (idleText == text) return;
+            idleText = text;
+            Invalidate(Rectangle.Ceiling(R(64, 1000, 1792, 48)));
+        }
+
+        private void DrawIdleCountdown(Graphics g)
+        {
+            if (idleFont == null || idleText.Length == 0) return;
+            GraphicsState saved = g.Save();
+            try
+            {
+                g.TranslateTransform(originX, originY);
+                g.ScaleTransform(scale, scale);
+                using (SolidBrush brush = new SolidBrush(Color.FromArgb(160, Cream)))
+                using (StringFormat format = new StringFormat())
+                {
+                    format.Alignment = StringAlignment.Center;
+                    format.LineAlignment = StringAlignment.Center;
+                    format.FormatFlags = StringFormatFlags.NoWrap;
+                    g.DrawString(idleText, idleFont, brush, new RectangleF(64, 1000, 1792, 48), format);
+                }
+            }
+            finally { g.Restore(saved); }
+        }
+
         private void UpdateBar(long now)
         {
             float fraction = Math.Min(1f, Math.Max(0f, (now - barStarted) / 300f));
@@ -416,6 +456,7 @@ namespace Bubliklyuk
                 DrawVirus(g, now);
                 DrawCombat(g, now);
                 DrawSpeech(g, now);
+                DrawIdleCountdown(g);
                 base.OnPaint(e);
             }
             catch (Exception ex)
@@ -999,6 +1040,7 @@ namespace Bubliklyuk
             {
                 if (inputFont != null) { inputFont.Dispose(); inputFont = null; }
                 if (buttonFont != null) { buttonFont.Dispose(); buttonFont = null; }
+                if (idleFont != null) { idleFont.Dispose(); idleFont = null; }
             }
         }
     }

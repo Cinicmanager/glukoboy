@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.3.0.0")]
-[assembly: AssemblyFileVersion("1.3.0.0")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyFileVersion("1.4.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -113,6 +113,7 @@ namespace Bubliklyuk
         internal TimeSpan SchoolFrom = new TimeSpan(8, 20, 0);
         internal TimeSpan SchoolTo = new TimeSpan(9, 0, 0);
         internal string SchoolDays = "12345";
+        internal int IdleLeave = 60;
         internal bool TestMode;
 
         internal const string DefaultText =
@@ -135,6 +136,8 @@ namespace Bubliklyuk
             "; Пора в школу: экран-блокировка по будням. Одинаковое время — выключить.\r\n" +
             "; SchoolDays — дни недели цифрами: 1 — понедельник … 7 — воскресенье.\r\n" +
             "SchoolFrom=08:20\r\nSchoolTo=09:00\r\nSchoolDays=12345\r\n" +
+            "; Атака уходит сама, если столько минут не трогать клавиатуру и мышь. 0 — выключить.\r\n" +
+            "IdleLeave=60\r\n" +
             "; 1 — первая дневная атака через 10 секунд, следующие через минуту.\r\n" +
             "; Ночь и свободное утро действуют и в тестовом режиме.\r\n" +
             "TestMode=0\r\n";
@@ -174,6 +177,7 @@ namespace Bubliklyuk
             s.Grade = ReadInt(values, "Grade", 1, 1, 3);
             s.Level = ReadInt(values, "Level", 1, 1, 3);
             s.MathMax = ReadInt(values, "MathMax", 10, 3, 10);
+            s.IdleLeave = ReadInt(values, "IdleLeave", 60, 0, 1440);
             s.TestMode = ReadInt(values, "TestMode", 0, 0, 1) == 1;
             s.NightFrom = ReadTime(values, "NightFrom", new TimeSpan(21, 0, 0));
             s.NightTo = ReadTime(values, "NightTo", new TimeSpan(7, 0, 0));
@@ -267,6 +271,7 @@ namespace Bubliklyuk
         private DateTime skipUntil = DateTime.MinValue;
         private DateTime warnedStart = DateTime.MinValue;
         private bool waitingForMorning;
+        private bool waitingForInput;
         private bool initialized;
         private bool exiting;
         private bool recovering;
@@ -329,7 +334,7 @@ namespace Bubliklyuk
         private void ScheduleDay(bool first)
         {
             cycleTimer.Stop();
-            if (exiting || night != null || school != null || attack != null) return;
+            if (exiting || waitingForInput || night != null || school != null || attack != null) return;
             DateTime start, end;
             DateTime now = DateTime.Now;
             if (IsBlocked(now, out start, out end)) { EnterNight(start, end); return; }
@@ -379,6 +384,7 @@ namespace Bubliklyuk
                 catch (Exception ex) { Diag.Log("GameContext.OnCycle", ex); RecoverUi(ex); }
                 return;
             }
+            if (waitingForInput) return;
             DateTime now = DateTime.Now;
             DateTime start, end;
             if (!IsBlocked(now, out start, out end) && !IsSchoolWindow(now, out start, out end) &&
@@ -396,8 +402,43 @@ namespace Bubliklyuk
             try
             {
                 CheckSchedule();
+                CheckIdle();
             }
             catch (Exception ex) { Diag.Log("GameContext.OnHeartbeat", ex); RecoverUi(ex); }
+        }
+        private void CheckIdle()
+        {
+            if (exiting || (!waitingForInput && (attack == null || settings.IdleLeave <= 0))) return;
+            TimeSpan idle = Native.IdleTime();
+            DateTime now = DateTime.Now;
+            DateTime start, end;
+            if (attack != null && settings.IdleLeave > 0)
+            {
+                if (!IsBlocked(now, out start, out end) && !IsSchoolWindow(now, out start, out end) &&
+                    idle >= TimeSpan.FromMinutes(settings.IdleLeave))
+                {
+                    Diag.Info("attack: idle leave");
+                    cycleTimer.Stop();
+                    waitingForInput = true;
+                    AttackForm old = attack;
+                    attack = null;
+                    old.FormClosed -= OnAttackClosed;
+                    try { old.Abort(); }
+                    finally { audio.Restore(); }
+                    return;
+                }
+                attack.UpdateIdleCountdown(idle);
+            }
+            if (waitingForInput && night == null && school == null && idle < TimeSpan.FromSeconds(5))
+            {
+                waitingForInput = false;
+                ScheduleDay(false);
+                string message = "БублиГлюк заскучал и ушёл.";
+                if (cycleTimer.Enabled)
+                    message += "\r\nСледующая атака через " +
+                        Math.Max(1, cycleTimer.Interval / 60000).ToString(CultureInfo.InvariantCulture) + " мин.";
+                ShowNotice(message, 5000);
+            }
         }
         private void CheckSchedule()
         {
@@ -460,6 +501,7 @@ namespace Bubliklyuk
         {
             if (exiting) { Diag.Info("attack: exiting"); return; }
             if (!initialized) { Diag.Info("attack: not initialized"); return; }
+            waitingForInput = false;
             if (night != null) { Diag.Info("attack: night window open"); return; }
             DateTime now = DateTime.Now;
             DateTime start, end;
@@ -843,6 +885,36 @@ namespace Bubliklyuk
 
     internal static class Native
     {
+        [StructLayout(LayoutKind.Sequential)]
+        private struct LASTINPUTINFO
+        {
+            internal uint cbSize;
+            internal uint dwTime;
+        }
+        private static bool idleFailureLogged;
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+        internal static TimeSpan IdleTime()
+        {
+            try
+            {
+                LASTINPUTINFO info = new LASTINPUTINFO();
+                info.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+                if (!GetLastInputInfo(ref info))
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+                return TimeSpan.FromMilliseconds(unchecked((uint)Environment.TickCount - info.dwTime));
+            }
+            catch (Exception ex)
+            {
+                if (!idleFailureLogged)
+                {
+                    idleFailureLogged = true;
+                    Diag.Log("Native.IdleTime", ex);
+                }
+                return TimeSpan.Zero;
+            }
+        }
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool SetProcessDPIAware();
