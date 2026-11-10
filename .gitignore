@@ -3,6 +3,7 @@
 *.exe.old
 update.log
 night-state.txt
+school-state.txt
 *.bak
 /settings.ini
 /tasks.txt

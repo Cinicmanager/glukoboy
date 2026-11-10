@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.2.0.0")]
-[assembly: AssemblyFileVersion("1.2.0.0")]
+[assembly: AssemblyVersion("1.3.0.0")]
+[assembly: AssemblyFileVersion("1.3.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -110,6 +110,9 @@ namespace Bubliklyuk
         internal TimeSpan NightTo = new TimeSpan(7, 0, 0);
         internal TimeSpan FreeFrom = new TimeSpan(7, 0, 0);
         internal TimeSpan FreeTo = new TimeSpan(9, 0, 0);
+        internal TimeSpan SchoolFrom = new TimeSpan(8, 20, 0);
+        internal TimeSpan SchoolTo = new TimeSpan(9, 0, 0);
+        internal string SchoolDays = "12345";
         internal bool TestMode;
 
         internal const string DefaultText =
@@ -129,6 +132,9 @@ namespace Bubliklyuk
             "; Свободное утро: атак по таймеру нет, компьютер работает как обычно.\r\n" +
             "; Одинаковое время (например 07:00 и 07:00) — выключить.\r\n" +
             "FreeFrom=07:00\r\nFreeTo=09:00\r\n" +
+            "; Пора в школу: экран-блокировка по будням. Одинаковое время — выключить.\r\n" +
+            "; SchoolDays — дни недели цифрами: 1 — понедельник … 7 — воскресенье.\r\n" +
+            "SchoolFrom=08:20\r\nSchoolTo=09:00\r\nSchoolDays=12345\r\n" +
             "; 1 — первая дневная атака через 10 секунд, следующие через минуту.\r\n" +
             "; Ночь и свободное утро действуют и в тестовом режиме.\r\n" +
             "TestMode=0\r\n";
@@ -178,6 +184,16 @@ namespace Bubliklyuk
             }
             s.FreeFrom = ReadTime(values, "FreeFrom", new TimeSpan(7, 0, 0));
             s.FreeTo = ReadTime(values, "FreeTo", new TimeSpan(9, 0, 0));
+            s.SchoolFrom = ReadTime(values, "SchoolFrom", new TimeSpan(8, 20, 0));
+            s.SchoolTo = ReadTime(values, "SchoolTo", new TimeSpan(9, 0, 0));
+            string schoolDays;
+            if (values.TryGetValue("SchoolDays", out schoolDays))
+            {
+                StringBuilder days = new StringBuilder();
+                foreach (char day in schoolDays)
+                    if (day >= '1' && day <= '7' && days.ToString().IndexOf(day) < 0) days.Append(day);
+                if (days.Length > 0) s.SchoolDays = days.ToString();
+            }
             return s;
         }
         private static int ReadInt(Dictionary<string, string> values, string key, int fallback, int min, int max)
@@ -245,6 +261,9 @@ namespace Bubliklyuk
         private readonly string bankWarning;
         private AttackForm attack;
         private NightForm night;
+        private SchoolForm school;
+        private DateTime schoolSkipUntil = DateTime.MinValue;
+        private bool waitingForSchool;
         private DateTime skipUntil = DateTime.MinValue;
         private DateTime warnedStart = DateTime.MinValue;
         private bool waitingForMorning;
@@ -277,6 +296,13 @@ namespace Bubliklyuk
                     "s", CultureInfo.InvariantCulture, DateTimeStyles.None, out saved)) skipUntil = saved;
             }
             catch (Exception ex) { Diag.Log("GameContext.ctor.LoadNightState", ex); }
+            try
+            {
+                DateTime saved;
+                if (DateTime.TryParseExact(File.ReadAllText(Settings.FilePath("school-state.txt"), Encoding.UTF8).Trim(),
+                    "s", CultureInfo.InvariantCulture, DateTimeStyles.None, out saved)) schoolSkipUntil = saved;
+            }
+            catch (Exception ex) { Diag.Log("GameContext.ctor.LoadSchoolState", ex); }
             // First callback runs only after Application.Run starts its message loop.
             cycleTimer.Interval = 1;
             cycleTimer.Start();
@@ -284,6 +310,16 @@ namespace Bubliklyuk
         private bool IsBlocked(DateTime now, out DateTime start, out DateTime end)
         {
             return NightSchedule.Current(settings, now, out start, out end) && skipUntil != end;
+        }
+        private bool IsSchoolWindow(DateTime now, out DateTime start, out DateTime end)
+        {
+            if (!TimeWindow.Current(settings.SchoolFrom, settings.SchoolTo, now, out start, out end)) return false;
+            int day = start.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)start.DayOfWeek;
+            return settings.SchoolDays.IndexOf((char)('0' + day)) >= 0;
+        }
+        private bool IsSchoolBlocked(DateTime now, out DateTime start, out DateTime end)
+        {
+            return IsSchoolWindow(now, out start, out end) && schoolSkipUntil != end;
         }
         private bool IsWarningWindow(DateTime now)
         {
@@ -293,10 +329,13 @@ namespace Bubliklyuk
         private void ScheduleDay(bool first)
         {
             cycleTimer.Stop();
-            if (exiting || night != null || attack != null) return;
+            if (exiting || night != null || school != null || attack != null) return;
             DateTime start, end;
             DateTime now = DateTime.Now;
             if (IsBlocked(now, out start, out end)) { EnterNight(start, end); return; }
+            if (IsSchoolBlocked(now, out start, out end)) { EnterSchool(start, end); return; }
+            waitingForSchool = IsSchoolWindow(now, out start, out end);
+            if (waitingForSchool) { waitingForMorning = false; return; }
             if (IsWarningWindow(now)) { waitingForMorning = true; return; }
             waitingForMorning = false;
             int interval = settings.TestMode ? (first ? 10000 : 60000) :
@@ -320,7 +359,7 @@ namespace Bubliklyuk
                 try
                 {
                     CheckSchedule();
-                    if (night == null && !waitingForMorning) ScheduleDay(true);
+                    if (night == null && school == null && !waitingForMorning) ScheduleDay(true);
                     DateTime freeStart, freeEnd;
                     string message = night != null ? "Глюкобой запущен. Ночной режим до " + settings.NightTo.ToString(@"hh\:mm") :
                         waitingForMorning ? "Глюкобой запущен. Скоро пора остывать." :
@@ -328,7 +367,7 @@ namespace Bubliklyuk
                         "Глюкобой запущен. Свободное утро до " + settings.FreeTo.ToString(@"hh\:mm") + "." :
                         "Глюкобой запущен. Атака через " + (settings.TestMode ? "10 секунд." :
                         (cycleTimer.Interval / 60000).ToString(CultureInfo.InvariantCulture) + " мин.");
-                    if (!waitingForMorning)
+                    if (night == null && school == null && !waitingForMorning && !waitingForSchool)
                         ShowNotice(message + "\r\nCtrl+Alt+B — атака, Ctrl+Alt+Q — выход", 3000);
                     string warning = bankWarning;
                     if (hotKey.Unavailable.Count > 0)
@@ -342,7 +381,8 @@ namespace Bubliklyuk
             }
             DateTime now = DateTime.Now;
             DateTime start, end;
-            if (!IsBlocked(now, out start, out end) && !IsWarningWindow(now) &&
+            if (!IsBlocked(now, out start, out end) && !IsSchoolWindow(now, out start, out end) &&
+                !IsWarningWindow(now) &&
                 TimeWindow.Current(settings.FreeFrom, settings.FreeTo, now, out start, out end))
             {
                 Diag.Info("attack: free morning");
@@ -375,6 +415,28 @@ namespace Bubliklyuk
                 audio.Restore();
                 ScheduleDay(false);
             }
+            if (IsSchoolBlocked(now, out start, out end))
+            {
+                if (school == null || school.EndTime != end) EnterSchool(start, end);
+                return;
+            }
+            if (school != null)
+            {
+                CloseSchool();
+                audio.Restore();
+                ScheduleDay(false);
+            }
+            if (IsSchoolWindow(now, out start, out end))
+            {
+                waitingForSchool = true;
+                cycleTimer.Stop();
+                return;
+            }
+            if (waitingForSchool)
+            {
+                waitingForSchool = false;
+                if (attack == null) ScheduleDay(false);
+            }
             if (IsWarningWindow(now))
             {
                 waitingForMorning = true;
@@ -398,7 +460,6 @@ namespace Bubliklyuk
         {
             if (exiting) { Diag.Info("attack: exiting"); return; }
             if (!initialized) { Diag.Info("attack: not initialized"); return; }
-            if (attack != null) { Diag.Info("attack: already open"); return; }
             if (night != null) { Diag.Info("attack: night window open"); return; }
             DateTime now = DateTime.Now;
             DateTime start, end;
@@ -408,6 +469,13 @@ namespace Bubliklyuk
                 EnterNight(start, end);
                 return;
             }
+            if (school != null || IsSchoolWindow(now, out start, out end))
+            {
+                Diag.Info("attack: school window");
+                CheckSchedule();
+                return;
+            }
+            if (attack != null) { Diag.Info("attack: already open"); return; }
             if (IsWarningWindow(now)) { Diag.Info("attack: night warning window"); CheckSchedule(); return; }
             cycleTimer.Stop();
             openingAttack = true;
@@ -431,6 +499,7 @@ namespace Bubliklyuk
             // Check the clock before restoration, so 21:00 transfers the audio owner.
             DateTime start, end;
             if (!exiting && IsBlocked(DateTime.Now, out start, out end)) EnterNight(start, end);
+            else if (!exiting && IsSchoolBlocked(DateTime.Now, out start, out end)) EnterSchool(start, end);
             else { audio.Restore(); ScheduleDay(false); }
         }
         private void EnterNight(DateTime start, DateTime end)
@@ -438,6 +507,8 @@ namespace Bubliklyuk
             cycleTimer.Stop();
             waitingForMorning = false;
             audio.Begin(); // Idempotent: attack -> night retains the original mute.
+            waitingForSchool = false;
+            CloseSchool();
             AttackForm old = attack;
             attack = null;
             if (old != null)
@@ -467,6 +538,64 @@ namespace Bubliklyuk
             old.FormClosed -= OnNightClosed;
             old.Abort();
         }
+        private void EnterSchool(DateTime start, DateTime end)
+        {
+            cycleTimer.Stop();
+            waitingForMorning = false;
+            waitingForSchool = true;
+            audio.Begin();
+            AttackForm old = attack;
+            attack = null;
+            if (old != null)
+            {
+                old.FormClosed -= OnAttackClosed;
+                old.Abort();
+            }
+            CloseNight();
+            CloseSchool();
+            school = new SchoolForm(start, end, SkipSchool, RecoverUi);
+            school.FormClosed += OnSchoolClosed;
+            school.Show();
+        }
+        private void OnSchoolClosed(object sender, FormClosedEventArgs e)
+        {
+            if (!Object.ReferenceEquals(sender, school)) return;
+            school.FormClosed -= OnSchoolClosed;
+            school = null;
+            audio.Restore();
+            if (e.CloseReason == CloseReason.WindowsShutDown) Shutdown();
+            // Unexpected disposal is repaired by the heartbeat.
+        }
+        private void CloseSchool()
+        {
+            SchoolForm old = school;
+            school = null;
+            if (old == null) return;
+            old.FormClosed -= OnSchoolClosed;
+            old.Abort();
+        }
+        private void SkipSchool()
+        {
+            if (exiting || !initialized || school == null) return;
+            DateTime start, end;
+            DateTime now = DateTime.Now;
+            if (IsBlocked(now, out start, out end)) { CheckSchedule(); return; }
+            if (!IsSchoolWindow(now, out start, out end) || school.EndTime != end)
+            {
+                CheckSchedule();
+                return;
+            }
+            schoolSkipUntil = end;
+            try
+            {
+                File.WriteAllText(Settings.FilePath("school-state.txt"), end.ToString("s", CultureInfo.InvariantCulture),
+                    new UTF8Encoding(true));
+            }
+            catch (Exception ex) { Diag.Log("GameContext.SkipSchool.SaveState", ex); }
+            CloseSchool();
+            audio.Restore();
+            ScheduleDay(false);
+        }
         private void SkipNight()
         {
             if (exiting || !initialized) return;
@@ -494,6 +623,7 @@ namespace Bubliklyuk
                 oldAttack.Abort();
             }
             CloseNight();
+            CloseSchool();
             audio.Restore();
             ScheduleDay(false);
             ShowNotice("Ночь пропущена до " + end.ToString("HH:mm", CultureInfo.InvariantCulture), 3000);
@@ -518,15 +648,18 @@ namespace Bubliklyuk
                 }
                 try { CloseNight(); }
                 catch (Exception ex) { Diag.Log("GameContext.RecoverUi.CloseNight", ex); }
+                try { CloseSchool(); }
+                catch (Exception ex) { Diag.Log("GameContext.RecoverUi.CloseSchool", ex); }
             }
             finally
             {
                 recovering = false;
-                // Night recovery is retried by heartbeat; never recursively rebuild a broken form.
+                // Night and school recovery is retried by heartbeat; never recursively rebuild a broken form.
                 try
                 {
                     DateTime start, end;
-                    if (!IsBlocked(DateTime.Now, out start, out end)) ScheduleDay(false);
+                    DateTime now = DateTime.Now;
+                    if (!IsBlocked(now, out start, out end) && !IsSchoolBlocked(now, out start, out end)) ScheduleDay(false);
                 }
                 finally { if (attackFailed) ShowAttackFailure(error); }
             }
@@ -548,7 +681,7 @@ namespace Bubliklyuk
         internal void RestoreAudio() { audio.Restore(); }
         private void ShowInformation(string text)
         {
-            MessageBox.Show(night, text, "Глюкобой", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(night != null ? (Form)night : school, text, "Глюкобой", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
         private void ShowNotice(string text, int duration)
         {
@@ -558,7 +691,7 @@ namespace Bubliklyuk
                 notices.RemoveAt(i);
             }
             StartupNotice notice = new StartupNotice(text, duration);
-            notice.Owner = night != null ? (Form)night : attack;
+            notice.Owner = night != null ? (Form)night : school != null ? (Form)school : attack;
             notices.Add(notice);
             notice.Show();
         }
@@ -581,6 +714,8 @@ namespace Bubliklyuk
                 }
                 try { CloseNight(); }
                 catch (Exception ex) { Diag.Log("GameContext.Shutdown.CloseNight", ex); }
+                try { CloseSchool(); }
+                catch (Exception ex) { Diag.Log("GameContext.Shutdown.CloseSchool", ex); }
                 foreach (StartupNotice notice in notices)
                 {
                     try { if (!notice.IsDisposed) { notice.Close(); notice.Dispose(); } }
