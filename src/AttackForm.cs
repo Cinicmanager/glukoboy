@@ -12,7 +12,7 @@ using System.Windows.Forms;
 
 namespace Bubliklyuk
 {
-    internal sealed class AttackForm : Form
+    internal sealed partial class AttackForm : Form
     {
         private enum Stage { Asking, Hit, Defeated }
 
@@ -83,6 +83,9 @@ namespace Bubliklyuk
             this.taskCount = taskCount;
             this.failure = failure;
             idleLeave = settings.IdleLeave;
+            animationLevel = settings.AnimationLevel;
+            entranceVariant = NextScene(ref lastEntrance);
+            finaleVariant = NextScene(ref lastFinale);
             if (idleLeave > 0) idleFont = new Font("Segoe UI", 32, FontStyle.Bold, GraphicsUnit.Pixel);
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
@@ -117,9 +120,10 @@ namespace Bubliklyuk
             Controls.Add(answer);
             Controls.Add(submit);
             AcceptButton = submit;
+            CreateChoiceControls();
 
             animationTimer = new System.Windows.Forms.Timer();
-            animationTimer.Interval = 16;
+            animationTimer.Interval = animationLevel == 0 ? 100 : animationLevel == 1 ? 33 : 16;
             animationTimer.Tick += AnimationTick;
             focusTimer = new System.Windows.Forms.Timer();
             focusTimer.Interval = 500;
@@ -201,6 +205,7 @@ namespace Bubliklyuk
                 (int)Math.Round(field.Y + (field.Height - textHeight) / 2),
                 Math.Max(1, (int)Math.Round(field.Width - 48 * scale)), textHeight);
             submit.Bounds = Rectangle.Round(R(1439, AnswerRowY, 312, 112));
+            LayoutChoiceControls();
             Invalidate();
         }
 
@@ -215,14 +220,15 @@ namespace Bubliklyuk
             phraseStarted = clock.ElapsedMilliseconds;
         }
 
-        private void NewExercise()
+        private void NewExercise(Exercise replacement = null)
         {
-            exercise = generator.Next();
+            exercise = replacement ?? generator.Next();
+            SetUpChoice();
             pictureImage = exercise.Picture == null ? null : GetImage("pic_" + exercise.Picture + ".png");
             LayoutScene();
             currentTaskIndex = completed + 1;
             cardShownAt = clock.ElapsedMilliseconds;
-            cardEntering = true;
+            cardEntering = animationLevel > 0;
             laughStarted = -1;
             cardShakeStarted = -1;
             stage = Stage.Asking;
@@ -234,7 +240,7 @@ namespace Bubliklyuk
             answer.Clear();
             answer.Enabled = true;
             submit.Enabled = true;
-            answer.Focus();
+            if (!IsChoice) answer.Focus();
             Invalidate();
         }
 
@@ -250,11 +256,19 @@ namespace Bubliklyuk
 
         private void CheckAnswer()
         {
+            if (IsChoice || clock.ElapsedMilliseconds < typedAvailableAt) return;
+            if (answer.Text.Trim().Length == 0) return;
+            typedAvailableAt = clock.ElapsedMilliseconds + 800;
+            SubmitAnswer(answer.Text);
+        }
+
+        private void SubmitAnswer(string input)
+        {
             if (stopping || stage != Stage.Asking || exercise == null) return;
             try
             {
-                if (answer.Text.Trim().Length == 0) return;
-                if (!exercise.Matches(answer.Text))
+                if (input.Trim().Length == 0) return;
+                if (!exercise.Matches(input))
                 {
                     virusImage = "counter.png";
                     correctStreak = 0;
@@ -271,6 +285,7 @@ namespace Bubliklyuk
                     return;
                 }
                 completed++;
+                hitVariant = (hitVariant + 1) % 3;
                 correctStreak++;
                 impactSpawned = false;
                 long now = clock.ElapsedMilliseconds;
@@ -292,6 +307,7 @@ namespace Bubliklyuk
                 wrongAnswer = false;
                 answer.Enabled = false;
                 submit.Enabled = false;
+                help.Enabled = false;
                 Invalidate();
             }
             catch (Exception ex) { Diag.Log("AttackForm.CheckAnswer", ex); Fail(ex); }
@@ -303,6 +319,7 @@ namespace Bubliklyuk
             try
             {
                 long now = clock.ElapsedMilliseconds;
+                TickChoices(now);
                 bool barChanged = false;
                 if (Math.Abs(displayedBar - barTarget) > 0.001f)
                 {
@@ -324,7 +341,7 @@ namespace Bubliklyuk
                         virusImage = "attack.png";
                     }
                 }
-                if (stage == Stage.Asking && angryStarted < 0 && now >= nextGlitchAt)
+                if (animationLevel == 2 && stage == Stage.Asking && angryStarted < 0 && now >= nextGlitchAt)
                 {
                     glitchUntil = now + 120;
                     glitchSeed = random.Next(10000);
@@ -348,18 +365,12 @@ namespace Bubliklyuk
                     {
                         if (completed >= taskCount)
                         {
-                            stage = Stage.Defeated;
-                            stageStarted = now;
-                            virusImage = "defeated.png";
-                            SetPhrase("Ладно, я за новым тапком");
-                            resultText = "Атака отбита!";
-                            SpawnParticles(now, 24, true);
-                            Invalidate(Rectangle.Ceiling(R(686, 216, 1170, 740)));
+                            ShowVictory(now);
                         }
                         else NewExercise();
                     }
                 }
-                else if (stage == Stage.Defeated && now - stageStarted >= 2000)
+                else if (stage == Stage.Defeated && now - stageStarted >= 2400)
                 {
                     Close();
                     return;
@@ -462,7 +473,7 @@ namespace Bubliklyuk
             BringToFront();
             Native.SetForegroundWindow(Handle);
             Activate();
-            if (stage == Stage.Asking && answer.Enabled) answer.Focus();
+            if (stage == Stage.Asking && !IsChoice && answer.Enabled && !help.Focused) answer.Focus();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -484,13 +495,16 @@ namespace Bubliklyuk
                 using (SolidBrush brush = new SolidBrush(Cream)) g.FillPath(brush, path);
                 g.Restore(cardBackground);
 
-                RectangleF field = R(791, AnswerRowY, 620, 112);
-                using (GraphicsPath path = Rounded(field, 22 * scale))
-                using (SolidBrush brush = new SolidBrush(Color.White))
-                using (Pen border = new Pen(answer.Focused && answer.Enabled ? Mint : Ink, Math.Max(2, 3 * scale)))
+                if (!IsChoice && stage != Stage.Defeated)
                 {
-                    g.FillPath(brush, path);
-                    g.DrawPath(border, path);
+                    RectangleF field = R(791, AnswerRowY, 620, 112);
+                    using (GraphicsPath path = Rounded(field, 22 * scale))
+                    using (SolidBrush brush = new SolidBrush(Color.White))
+                    using (Pen border = new Pen(answer.Focused && answer.Enabled ? Mint : Ink, Math.Max(2, 3 * scale)))
+                    {
+                        g.FillPath(brush, path);
+                        g.DrawPath(border, path);
+                    }
                 }
 
                 GraphicsState cardText = g.Save();
@@ -498,10 +512,11 @@ namespace Bubliklyuk
                 DrawExercise(g, now);
                 Color resultColor = wrongAnswer ? Color.FromArgb(122, 54, 128) : Color.FromArgb(24, 103, 86);
                 bool longCard = exercise != null && exercise.LongText;
-                DrawText(g, resultText, 32, FontStyle.Bold, resultColor,
-                    R(766, longCard ? 800 : 712, 1010, 64), true);
-                DrawText(g, "Введи ответ → Enter", 28, FontStyle.Regular, Ink,
-                    R(766, longCard ? 884 : 808, 1010, longCard ? 48 : 64), true);
+                DrawText(g, resultText, 28, FontStyle.Bold, resultColor,
+                    R(746, IsChoice || longCard ? 780 : 712, 1050, 96), true);
+                if (stage != Stage.Defeated)
+                    DrawText(g, IsChoice ? "Нажми на верный ответ" : "Введи ответ → Enter", 26, FontStyle.Regular, Ink,
+                        R(766, 884, 760, 48), true);
                 g.Restore(cardText);
                 DrawCardCelebration(g, now);
                 DrawWave(g, now);
@@ -570,6 +585,7 @@ namespace Bubliklyuk
                     DrawText(g, "Компьютер защищён!", 34, FontStyle.Bold, Ink, R(766, 300, 1010, 80), true);
                     DrawText(g, "Ты отбил атаку", 68, FontStyle.Bold, Ink, R(766, 396, 1010, 120), true, 84);
                 }
+                else if (IsChoice) DrawChoiceQuestion(g);
                 else if (exercise != null && exercise.LongText)
                 {
                     DrawParagraph(g, exercise.Text, Math.Max(24, 36 * scale), ink, R(textX, 300, textWidth, 232));
@@ -588,6 +604,7 @@ namespace Bubliklyuk
 
         private float CardOffsetX(long now)
         {
+            if (animationLevel == 0 || IsChoice) return 0;
             float offset = 0;
             if (exercise != null && stage != Stage.Defeated)
             {
@@ -607,7 +624,7 @@ namespace Bubliklyuk
             if (pictureImage == null) return;
             float size = GradedReadingBank.PictureSize;
             float top = exercise.LongText ? 367 : 298;
-            float wave = (float)Math.Sin(now * Math.PI * 2 / 2400.0);
+            float wave = (animationLevel == 0 ? 0 : .35f) * (float)Math.Sin(now * Math.PI * 2 / 3200.0);
             GraphicsState saved = g.Save();
             try
             {
@@ -624,6 +641,7 @@ namespace Bubliklyuk
 
         private void SpawnCardStars(long now)
         {
+            if (animationLevel == 0) return;
             starsStarted = now;
             cardStars.Clear();
             for (int i = 0; i < 16; i++)
@@ -715,7 +733,7 @@ namespace Bubliklyuk
             float opacity = 1;
             float whiteFlash = 0;
             bool glitch = false;
-            float idle = (float)Math.Sin(now * Math.PI * 2 / 1600.0);
+            float idle = (animationLevel == 0 ? 0 : .25f) * (float)Math.Sin(now * Math.PI * 2 / 3200.0);
             if (stage == Stage.Asking)
             {
                 sx += 0.03f * idle;
@@ -772,6 +790,9 @@ namespace Bubliklyuk
                 sy *= grow;
             }
 
+            ApplyComedyPose(now, ref centerX, ref centerY, ref sx, ref sy, ref rotation, ref opacity);
+            if (animationLevel == 0) { sx = sy = 1; rotation = 0; whiteFlash = 0; glitch = false; }
+
             // Bound even the rotated/glitched image before drawing. Entrance may
             // start beyond the left edge, but never crosses the card or the bubble.
             double radians = rotation * Math.PI / 180;
@@ -804,6 +825,7 @@ namespace Bubliklyuk
                 DrawCharacter(g, local, opacity, whiteFlash, glitch, now);
             }
             finally { g.Restore(saved); }
+            DrawComedyProps(g, now, centerX, centerY);
         }
 
         private void DrawHalo(Graphics g, RectangleF box, int alpha)
@@ -930,6 +952,7 @@ namespace Bubliklyuk
 
         private void SpawnParticles(long now, int count, bool victory)
         {
+            if (animationLevel == 0) return;
             for (int i = 0; i < count; i++)
             {
                 BattleParticle p = new BattleParticle();

@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.5.0.0")]
-[assembly: AssemblyFileVersion("1.5.0.0")]
+[assembly: AssemblyVersion("1.6.0.0")]
+[assembly: AssemblyFileVersion("1.6.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -114,6 +114,8 @@ namespace Bubliklyuk
         internal TimeSpan SchoolTo = new TimeSpan(9, 0, 0);
         internal string SchoolDays = "12345";
         internal int IdleLeave = 60;
+        internal string NightModes = NightStories.DefaultModes;
+        internal int AnimationLevel = 1;
         internal bool TestMode;
 
         internal const string DefaultText =
@@ -139,6 +141,10 @@ namespace Bubliklyuk
             "SchoolFrom=08:20\r\nSchoolTo=09:00\r\nSchoolDays=12345\r\n" +
             "; Атака уходит сама, если столько минут не трогать клавиатуру и мышь. 0 — выключить.\r\n" +
             "IdleLeave=60\r\n" +
+            "; Ночные сюжеты: overheat,repair,cleanup,update. Можно оставить только overheat.\r\n" +
+            "NightModes=overheat,repair,cleanup,update\r\n" +
+            "; Анимация: 0 — минимум движения, 1 — обычная, 2 — активная.\r\n" +
+            "AnimationLevel=1\r\n" +
             "; 1 — первая дневная атака через 10 секунд, следующие через минуту.\r\n" +
             "; Ночь и свободное утро действуют и в тестовом режиме.\r\n" +
             "TestMode=0\r\n";
@@ -179,6 +185,9 @@ namespace Bubliklyuk
             s.Level = ReadInt(values, "Level", 1, 1, 3);
             s.MathMax = ReadInt(values, "MathMax", 10, 3, 10);
             s.IdleLeave = ReadInt(values, "IdleLeave", 60, 0, 1440);
+            s.AnimationLevel = ReadInt(values, "AnimationLevel", 1, 0, 2);
+            string nightModes;
+            if (values.TryGetValue("NightModes", out nightModes)) s.NightModes = NightStories.Normalize(nightModes);
             s.TestMode = ReadInt(values, "TestMode", 0, 0, 1) == 1;
             s.NightFrom = ReadTime(values, "NightFrom", new TimeSpan(21, 0, 0));
             s.NightTo = ReadTime(values, "NightTo", new TimeSpan(7, 0, 0));
@@ -368,7 +377,7 @@ namespace Bubliklyuk
                     if (night == null && school == null && !waitingForMorning) ScheduleDay(true);
                     DateTime freeStart, freeEnd;
                     string message = night != null ? "Глюкобой запущен. Ночной режим до " + settings.NightTo.ToString(@"hh\:mm") :
-                        waitingForMorning ? "Глюкобой запущен. Скоро пора остывать." :
+                        waitingForMorning ? "Глюкобой запущен. Скоро ночное обслуживание." :
                         TimeWindow.Current(settings.FreeFrom, settings.FreeTo, DateTime.Now, out freeStart, out freeEnd) ?
                         "Глюкобой запущен. Свободное утро до " + settings.FreeTo.ToString(@"hh\:mm") + "." :
                         "Глюкобой запущен. Атака через " + (settings.TestMode ? "10 секунд." :
@@ -489,7 +498,8 @@ namespace Bubliklyuk
                     warnedStart = next;
                     int minutes = Math.Max(1, (int)Math.Ceiling((next - now).TotalMinutes));
                     ShowNotice("Через " + minutes.ToString(CultureInfo.InvariantCulture) +
-                        " мин. ноутбук пойдёт остывать.\r\nПора заканчивать.", 5000);
+                        " мин.: " + NightStories.Select(settings.NightModes, next).Title +
+                        ".\r\nСохрани работу и заканчивай игру.", 5000);
                 }
             }
             else if (waitingForMorning)
@@ -560,7 +570,7 @@ namespace Bubliklyuk
                 old.Abort();
             }
             CloseNight();
-            night = new NightForm(start, end, RecoverUi);
+            night = new NightForm(start, end, settings, RecoverUi);
             night.FormClosed += OnNightClosed;
             night.Show();
         }

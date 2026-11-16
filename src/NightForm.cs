@@ -10,7 +10,7 @@ using System.Windows.Forms;
 
 namespace Bubliklyuk
 {
-    internal sealed class NightForm : Form
+    internal sealed partial class NightForm : Form
     {
         private static readonly Color Navy = Color.FromArgb(23, 27, 53);
         private static readonly Color Lime = Color.FromArgb(160, 240, 0);
@@ -29,15 +29,16 @@ namespace Bubliklyuk
         private long nextPhrase = 24000;
         private int phraseIndex;
         private string remaining = "";
-        private readonly string[] phrases = new string[] {
-            "У меня даже тапок перегрелся", "Вентилятор дует. Я отдыхаю",
-            "Сегодня захвачу только подушку", "До утра работаю бубликом" };
+        private readonly string[] phrases;
 
-        internal NightForm(DateTime start, DateTime end, Action<Exception> failure)
+        internal NightForm(DateTime start, DateTime end, Settings settings, Action<Exception> failure)
         {
             startTime = start;
             EndTime = end;
             this.failure = failure;
+            story = NightStories.Select(settings.NightModes, start);
+            phrases = story.Phrases;
+            animationLevel = settings.AnimationLevel;
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint |
                 ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
             DoubleBuffered = true;
@@ -48,11 +49,11 @@ namespace Bubliklyuk
             ShowInTaskbar = false;
             TopMost = true;
             BackColor = Navy;
-            Text = "Глюкобой — пора остывать";
+            Text = "Глюкобой — " + story.Title;
             images["night_bg.png"] = Load("night_bg.png");
-            images["night_virus.png"] = Load("night_virus.png");
+            images["night_virus.png"] = Load(story.Id == "overheat" ? "night_virus.png" : "virus_think.png");
             frames = new System.Windows.Forms.Timer();
-            frames.Interval = 40;
+            frames.Interval = animationLevel == 0 ? 1000 : 80;
             frames.Tick += Frame;
             focus = new System.Windows.Forms.Timer();
             focus.Interval = 500;
@@ -83,6 +84,7 @@ namespace Bubliklyuk
             if (stopping) return;
             try
             {
+                if (clock.ElapsedMilliseconds > 20000 && frames.Interval < 240) frames.Interval = 240;
                 if (clock.ElapsedMilliseconds >= nextPhrase)
                 {
                     phraseIndex = (phraseIndex + 1) % phrases.Length;
@@ -139,16 +141,20 @@ namespace Bubliklyuk
                 // Quiet opaque panel ensures legibility regardless of the supplied background.
                 using (GraphicsPath path = AttackForm.Rounded(R(700, 180, 1156, 770), 30 * scale))
                 using (SolidBrush brush = new SolidBrush(Color.FromArgb(235, Navy))) g.FillPath(brush, path);
-                float breathe = 3 * scale * (float)Math.Sin(clock.ElapsedMilliseconds * Math.PI / 2200.0);
+                float breathe = animationLevel == 0 ? 0 : 2 * scale * (float)Math.Sin(clock.ElapsedMilliseconds * Math.PI / 4000.0);
                 RectangleF virus = R(84, 270, 520, 520);
                 virus.Offset(0, breathe);
                 DrawAsset(g, images["night_virus.png"], virus, Color.FromArgb(165, 107, 255));
-                TextAt(g, "Пора остывать", 60, Cream, R(750, 240, 1056, 100));
-                TextAt(g, "Ноутбук отдыхает до " + EndTime.ToString("HH:mm"), 36, Cream, R(750, 360, 1056, 80));
-                TextAt(g, "До утра: " + remaining, 58, Lime, R(750, 520, 1056, 100));
-                TextAt(g, "Режим остывания", 28, Cream, R(1000, 730, 380, 65));
-                DrawThermometer(g);
-                DrawFan(g);
+                TextAt(g, story.Title, 54, Cream, R(750, 230, 1056, 100));
+                TextAt(g, story.Reason, 32, Cream, R(770, 340, 1016, 140));
+                TextAt(g, "Можно пользоваться в " + EndTime.ToString("HH:mm"), 44, Lime, R(750, 510, 1056, 100));
+                TextAt(g, "Я всё сделаю сам. Можно идти спать.", 30, Cream, R(770, 615, 1016, 75));
+                if (story.Id == "overheat")
+                {
+                    TextAt(g, story.Work, 28, Cream, R(1000, 730, 380, 65));
+                    DrawThermometer(g); DrawFan(g);
+                }
+                else DrawMaintenance(g);
                 using (GraphicsPath path = AttackForm.Rounded(R(64, 850, 560, 110), 22 * scale))
                 using (SolidBrush brush = new SolidBrush(Navy)) g.FillPath(brush, path);
                 TextAt(g, phrases[phraseIndex], 30, Cream, R(85, 860, 518, 90));
@@ -184,7 +190,7 @@ namespace Bubliklyuk
             try
             {
                 g.TranslateTransform(x, y);
-                g.RotateTransform((clock.ElapsedMilliseconds % 6000) * 360f / 6000);
+                g.RotateTransform(animationLevel == 0 ? 0 : (clock.ElapsedMilliseconds % 10000) * 360f / 10000);
                 using (SolidBrush blade = new SolidBrush(Color.FromArgb(150, Lime)))
                 {
                     for (int i = 0; i < 3; i++)
