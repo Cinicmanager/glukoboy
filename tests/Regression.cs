@@ -81,6 +81,28 @@ namespace Bubliklyuk
         private static void NightChecks()
         {
             DateTime date = new DateTime(2026, 11, 16, 21, 0, 0), start, end;
+            foreach (bool testMode in new bool[] { false, true })
+            {
+                Settings settings = new Settings { TestMode = testMode };
+                Check(!NightSchedule.PauseAttacks(settings, date.AddMinutes(-15).AddTicks(-1)), "Attack pause starts exactly at 20:45");
+                foreach (double minutes in new double[] { -15, -10, -5, -1 })
+                    Check(NightSchedule.PauseAttacks(settings, date.AddMinutes(minutes)), "No attacks in the last 15 minutes, including TestMode");
+                Check(NightSchedule.PauseAttacks(settings, date.AddTicks(-1)), "Pause includes the last instant before 21:00");
+                Check(!NightSchedule.PauseAttacks(settings, date), "At 21:00 night takes precedence");
+                Check(NightSchedule.Current(settings, date, out start, out end), "Night still starts at 21:00");
+                Check(!NightSchedule.PauseAttacks(settings, date.AddHours(10)), "No stale pause in the morning");
+                settings.NightFrom = new TimeSpan(22, 30, 0);
+                DateTime custom = date.Date.Add(settings.NightFrom);
+                Check(!NightSchedule.PauseAttacks(settings, custom.AddMinutes(-15).AddTicks(-1)), "Custom pause lower boundary");
+                Check(NightSchedule.PauseAttacks(settings, custom.AddMinutes(-15)), "Custom night pauses at 22:15");
+                Check(!NightSchedule.PauseAttacks(settings, date.AddMinutes(-10)), "Pause follows configured NightFrom");
+                settings.NightFrom = new TimeSpan(0, 5, 0);
+                custom = date.Date.AddDays(1).Add(settings.NightFrom);
+                Check(!NightSchedule.PauseAttacks(settings, custom.AddMinutes(-15).AddTicks(-1)), "Midnight pause lower boundary");
+                Check(NightSchedule.PauseAttacks(settings, custom.AddMinutes(-15)), "00:05 night pauses at 23:50");
+                Check(NightSchedule.PauseAttacks(settings, custom.Date), "Pause survives midnight");
+                Check(!NightSchedule.PauseAttacks(settings, custom), "Midnight pause ends exactly at night start");
+            }
             Check(TimeWindow.Current(TimeSpan.FromHours(21), TimeSpan.FromHours(7), date, out start, out end), "21:00 enters night");
             string story = NightStories.Select(NightStories.DefaultModes, start).Id;
             Check(TimeWindow.Current(TimeSpan.FromHours(21), TimeSpan.FromHours(7), date.AddHours(6), out start, out end), "Night crosses midnight");

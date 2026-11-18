@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.6.0.0")]
-[assembly: AssemblyFileVersion("1.6.0.0")]
+[assembly: AssemblyVersion("1.6.1.0")]
+[assembly: AssemblyFileVersion("1.6.1.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -260,6 +260,14 @@ namespace Bubliklyuk
             DateTime next = now.Date.Add(s.NightFrom);
             return next <= now ? next.AddDays(1) : next;
         }
+        internal static bool PauseAttacks(Settings s, DateTime now)
+        {
+            // A full 15-minute grace period before the next night, also when
+            // NightFrom is shortly after midnight. The night itself is handled
+            // first by Current(), including the parent's saved night skip.
+            TimeSpan remaining = NextStart(s, now) - now;
+            return remaining > TimeSpan.Zero && remaining <= TimeSpan.FromMinutes(15);
+        }
     }
 
     internal sealed class GameContext : ApplicationContext
@@ -351,7 +359,7 @@ namespace Bubliklyuk
             if (IsSchoolBlocked(now, out start, out end)) { EnterSchool(start, end); return; }
             waitingForSchool = IsSchoolWindow(now, out start, out end);
             if (waitingForSchool) { waitingForMorning = false; return; }
-            if (IsWarningWindow(now)) { waitingForMorning = true; return; }
+            if (NightSchedule.PauseAttacks(settings, now)) { waitingForMorning = true; return; }
             waitingForMorning = false;
             int interval = settings.TestMode ? (first ? 10000 : 60000) :
                 random.Next(settings.IntervalMin, settings.IntervalMax + 1) * 60000;
@@ -398,7 +406,7 @@ namespace Bubliklyuk
             DateTime now = DateTime.Now;
             DateTime start, end;
             if (!IsBlocked(now, out start, out end) && !IsSchoolWindow(now, out start, out end) &&
-                !IsWarningWindow(now) &&
+                !NightSchedule.PauseAttacks(settings, now) &&
                 TimeWindow.Current(settings.FreeFrom, settings.FreeTo, now, out start, out end))
             {
                 Diag.Info("attack: free morning");
@@ -488,12 +496,12 @@ namespace Bubliklyuk
                 waitingForSchool = false;
                 if (attack == null) ScheduleDay(false);
             }
-            if (IsWarningWindow(now))
+            if (NightSchedule.PauseAttacks(settings, now))
             {
                 waitingForMorning = true;
                 cycleTimer.Stop();
                 DateTime next = NightSchedule.NextStart(settings, now);
-                if (warnedStart != next)
+                if (IsWarningWindow(now) && warnedStart != next)
                 {
                     warnedStart = next;
                     int minutes = Math.Max(1, (int)Math.Ceiling((next - now).TotalMinutes));
@@ -529,7 +537,7 @@ namespace Bubliklyuk
                 return;
             }
             if (attack != null) { Diag.Info("attack: already open"); return; }
-            if (IsWarningWindow(now)) { Diag.Info("attack: night warning window"); CheckSchedule(); return; }
+            if (NightSchedule.PauseAttacks(settings, now)) { Diag.Info("attack: pre-night pause"); CheckSchedule(); return; }
             cycleTimer.Stop();
             openingAttack = true;
             try
@@ -539,6 +547,20 @@ namespace Bubliklyuk
                 generator.BeginAttack(count);
                 attack = new AttackForm(settings, generator, count, RecoverUi);
                 attack.FormClosed += OnAttackClosed;
+                // Audio activation and image loading can straddle 20:45 (or
+                // the start of night/school). Recheck before showing the form.
+                DateTime ready = DateTime.Now;
+                if (NightSchedule.PauseAttacks(settings, ready) ||
+                    IsBlocked(ready, out start, out end) || IsSchoolWindow(ready, out start, out end))
+                {
+                    AttackForm pending = attack;
+                    attack = null;
+                    pending.FormClosed -= OnAttackClosed;
+                    try { pending.Abort(); }
+                    finally { audio.Restore(); }
+                    CheckSchedule();
+                    return;
+                }
                 attack.Show();
             }
             catch (Exception ex) { Diag.Log("GameContext.AttackNow", ex); RecoverUi(ex); }
