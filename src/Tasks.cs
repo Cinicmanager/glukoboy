@@ -22,27 +22,11 @@ namespace Bubliklyuk
 
         internal bool Matches(string input)
         {
-            string value = Normalize(input);
-            if (value.Length == 0 || value.Length > 16) return false;
-            if (Numeric)
-            {
-                int actual;
-                if (!Int32.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out actual) || actual < 0)
-                    return false;
-                foreach (string variant in Answer.Split('|'))
-                {
-                    int expected;
-                    if (Int32.TryParse(Normalize(variant), NumberStyles.None,
-                        CultureInfo.InvariantCulture, out expected) && expected == actual) return true;
-                }
-                return false;
-            }
-            foreach (string key in Answer.Split('|')) if (value == Normalize(key)) return true;
-            return false;
+            return AnswerRules.Matches(Answer, Numeric, input);
         }
         internal static string Normalize(string text)
         {
-            return (text ?? "").Trim().ToLowerInvariant().Replace('ё', 'е');
+            return AnswerRules.Normalize(text);
         }
     }
 

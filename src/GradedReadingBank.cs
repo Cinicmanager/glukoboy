@@ -148,7 +148,7 @@ namespace Bubliklyuk
                     string type = fields[2 + offset];
                     string body = fields[3 + offset];
                     string question = fields[4 + offset];
-                    string answers = fields[5 + offset];
+                    string answers = legacy ? fields[5] : ReadingAnswerCompatibility.Expand(fields);
                     string picture = fields.Length == 8 && fields[7].Length > 0 ? fields[7] : null;
                     if (type.Length == 0 || body.Length == 0 || body.Length > 400 ||
                         question.Length == 0 || question.Length > 100 ||
@@ -160,15 +160,12 @@ namespace Bubliklyuk
                     foreach (string raw in variants)
                     {
                         string answer = Normalize(raw);
-                        if (answer.Length == 0 || answer.Length > 16) { valid = false; break; }
+                        if (answer.Length == 0 || answer.Length > AnswerRules.MaxLength) { valid = false; break; }
                         int number;
                         bool isNumber = Int32.TryParse(answer, NumberStyles.None,
                             CultureInfo.InvariantCulture, out number) && number >= 0;
                         numeric = numeric && isNumber;
-                        bool isWord = true;
-                        foreach (char c in answer)
-                            if (c < 'а' || c > 'я') { isWord = false; break; }
-                        words = words && isWord;
+                        words = words && AnswerRules.IsTextAnswer(answer);
                     }
                     if (!valid || (!numeric && !words)) { errors++; continue; }
                     bank.cards[grade - 1, level - 1].Add(
@@ -184,7 +181,7 @@ namespace Bubliklyuk
 
         internal static string Normalize(string value)
         {
-            return (value ?? "").Trim().ToLowerInvariant().Replace('ё', 'е');
+            return AnswerRules.Normalize(value);
         }
         internal static float MinimumTextPixels()
         {
@@ -212,24 +209,7 @@ namespace Bubliklyuk
         }
         internal static bool Matches(GradedCard card, string input)
         {
-            string actual = Normalize(input);
-            if (actual.Length == 0 || actual.Length > 16) return false;
-            if (card.Numeric)
-            {
-                int number;
-                if (!Int32.TryParse(actual, NumberStyles.None, CultureInfo.InvariantCulture,
-                    out number) || number < 0) return false;
-                foreach (string answer in card.Answers.Split('|'))
-                {
-                    int expected;
-                    if (Int32.TryParse(Normalize(answer), NumberStyles.None,
-                        CultureInfo.InvariantCulture, out expected) && expected == number) return true;
-                }
-                return false;
-            }
-            foreach (string raw in card.Answers.Split('|'))
-                if (Normalize(raw) == actual) return true;
-            return false;
+            return AnswerRules.Matches(card.Answers, card.Numeric, input);
         }
     }
 

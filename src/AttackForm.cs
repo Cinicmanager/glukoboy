@@ -104,7 +104,7 @@ namespace Bubliklyuk
             answer.TextAlign = HorizontalAlignment.Center;
             answer.BackColor = Color.White;
             answer.ForeColor = Ink;
-            answer.MaxLength = 16;
+            answer.MaxLength = AnswerRules.MaxLength;
             answer.AutoSize = true;
             answer.Multiline = false;
             answer.TabIndex = 0;

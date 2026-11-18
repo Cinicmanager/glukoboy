@@ -8,8 +8,8 @@ $exePath = Join-Path $checkPath 'Regression.exe'
 $compilerArgs = @('-nologo','-nowarn:108','-target:exe','-main:Bubliklyuk.Regression',('-out:' + $exePath),'-r:System.Windows.Forms.dll','-r:System.Drawing.dll')
 $compilerArgs += @(Get-ChildItem -LiteralPath (Join-Path $repoPath 'resources') -Filter '*.png' | ForEach-Object { '-resource:' + $_.FullName + ',' + $_.Name })
 $compilerArgs += @(Get-ChildItem -LiteralPath (Join-Path $repoPath 'src') -Filter '*.cs' | ForEach-Object { $_.FullName })
-$compilerArgs += Join-Path $PSScriptRoot 'Regression.cs'
+$compilerArgs += @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs' | ForEach-Object { $_.FullName })
 & $compiler @compilerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Regression compilation failed' }
-& $exePath $checkPath
+& $exePath $checkPath (Join-Path $repoPath 'src\tasks.txt')
 if ($LASTEXITCODE -ne 0) { throw ('Regression checks failed; artifacts: ' + $checkPath) }

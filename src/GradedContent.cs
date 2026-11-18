@@ -30,18 +30,21 @@ namespace Bubliklyuk
             "1;1;луна;лу + на\n1;1;рама;ра + ма\n1;1;сани;са + ни\n" +
             "1;1;нора;но + ра\n1;1;мыло;мы + ло\n1;1;каша;ка + ша\n" +
             "1;1;роза;ро + за\n1;1;зима;зи + ма\n1;1;лето;ле + то\n1;1;пила;пи + ла\n" +
-            "1;2;лиса;ли + са;lisa\n1;2;сова;со + ва;sova\n" +
-            "1;2;рыба;ры + ба;ryba\n1;2;роза;ро + за;roza\n" +
-            "1;2;луна;лу + на;luna\n1;2;коза;ко + за;koza\n" +
-            "1;2;ваза;ва + за;vaza\n1;2;пила;пи + ла;pila\n" +
-            "1;2;оса;о + са;osa\n1;2;утка;у + тка;utka\n" +
-            "1;2;кукла;ку + кла;kukla\n1;2;миска;ми + ска;miska\n" +
-            "1;2;лодка;ло + дка;lodka\n1;2;мама;ма + ма;\n" +
-            "1;2;папа;па + па;\n1;2;рама;ра + ма;\n1;2;каша;ка + ша;\n" +
-            "1;2;вата;ва + та;\n1;2;рука;ру + ка;\n1;2;нога;но + га;\n" +
-            "1;2;губа;гу + ба;\n1;2;коса;ко + са;\n1;2;лужа;лу + жа;\n" +
-            "1;2;муха;му + ха;\n1;2;дыра;ды + ра;\n1;2;нора;но + ра;\n" +
-            "1;2;море;мо + ре;\n1;2;поле;по + ле;\n1;2;лето;ле + то;\n1;2;сани;са + ни;\n" +
+            "1;2;собака;со + ба + ка\n1;2;корова;ко + ро + ва\n" +
+            "1;2;ворона;во + ро + на\n1;2;сорока;со + ро + ка\n" +
+            "1;2;курица;ку + ри + ца\n1;2;молоко;мо + ло + ко\n" +
+            "1;2;малина;ма + ли + на\n1;2;рябина;ря + би + на\n" +
+            "1;2;берёза;бе + рё + за\n1;2;осина;о + си + на\n" +
+            "1;2;машина;ма + ши + на\n1;2;ракета;ра + ке + та\n" +
+            "1;2;лопата;ло + па + та\n1;2;газета;га + зе + та\n" +
+            "1;2;бумага;бу + ма + га\n1;2;посуда;по + су + да\n" +
+            "1;2;дорога;до + ро + га\n1;2;погода;по + го + да\n" +
+            "1;2;монета;мо + не + та\n1;2;панама;па + на + ма\n" +
+            "1;2;медуза;ме + ду + за\n1;2;кабина;ка + би + на\n" +
+            "1;2;качели;ка + че + ли\n1;2;сапоги;са + по + ги\n" +
+            "1;2;кубики;ку + би + ки\n1;2;пироги;пи + ро + ги\n" +
+            "1;2;бананы;ба + на + ны\n1;2;лимоны;ли + мо + ны\n" +
+            "1;2;вагоны;ва + го + ны\n1;2;ягода;я + го + да\n" +
             "1;3;молодец;мо + ло + дец\n1;3;собака;со + ба + ка\n" +
             "1;3;барабан;ба + ра + бан\n1;3;молоко;мо + ло + ко\n" +
             "1;3;ворона;во + ро + на\n1;3;корова;ко + ро + ва\n" +
@@ -280,6 +283,8 @@ namespace Bubliklyuk
             int answer = plus ? a + step : a - step;
             if (level >= 2 && random.Next(4) == 0)
             {
+                if (level == 2)
+                    return FirstGradeSecondQuarterStory(a, step, plus, random.Next(SecondQuarterStoryCount));
                 if (plus)
                     return NumericStory("У Веры " + a + " " + Form(a, "мяч", "мяча", "мячей") +
                         ". Ей дали ещё " + step + ".", "Сколько мячей стало?", answer);
@@ -290,7 +295,94 @@ namespace Bubliklyuk
             int variant = random.Next(3);
             if (variant == 1) return Number("Какое число пропущено?", a + " " + sign + " □ = " + answer, step);
             if (variant == 2) return Number("Какое число пропущено?", "□ " + sign + " " + step + " = " + answer, a);
+            if (level == 2 && plus)
+            {
+                // Все три слагаемых положительные; место для оставшихся зарезервировано.
+                int first = random.Next(1, MathMin(3, maximum - 2) + 1);
+                int second = random.Next(1, MathMin(3, maximum - first - 1) + 1);
+                int third = random.Next(1, MathMin(3, maximum - first - second) + 1);
+                return Number("Реши пример", first + " + " + second + " + " + third + " = □",
+                    first + second + third);
+            }
             return Arithmetic(a, step, sign, answer);
+        }
+
+        internal const int SecondQuarterStoryCount = 12;
+
+        internal static GradedCard FirstGradeSecondQuarterStory(int a, int step, bool plus, int kind)
+        {
+            int answer = plus ? a + step : a - step;
+            switch (kind)
+            {
+                case 0:
+                    return NumericStory("В саду Рома собрал " + Counted(a, "яблоко", "яблока", "яблок") +
+                        ". Потом он " + (plus ? "собрал ещё " : "отдал сестре ") +
+                        Counted(step, "яблоко", "яблока", "яблок") + ".",
+                        "Сколько яблок у Ромы?", answer);
+                case 1:
+                    return NumericStory("На полке " + Counted(a, "книга", "книги", "книг") +
+                        ". Оля " + (plus ? "поставила ещё " : "взяла ") +
+                        Counted(step, "книгу", "книги", "книг") + ".",
+                        "Сколько книг теперь на полке?", answer);
+                case 2:
+                    return NumericStory("В автобусе " + Counted(a, "ребёнок", "ребёнка", "детей") +
+                        ". На остановке " + (plus ? (step == 1 ? "вошёл ещё " : "вошли ещё ") :
+                        (step == 1 ? "вышел " : "вышли ")) + Counted(step, "ребёнок", "ребёнка", "детей") + ".",
+                        "Сколько детей теперь в автобусе?", answer);
+                case 3:
+                    return NumericStory("На пруду " + Counted(a, "утка", "утки", "уток") + ". " +
+                        (plus ? (step == 1 ? "Приплыла ещё " : "Приплыли ещё ") :
+                        (step == 1 ? "На берег вышла " : "На берег вышли ")) +
+                        Counted(step, "утка", "утки", "уток") + ".",
+                        "Сколько уток в воде?", answer);
+                case 4:
+                    return NumericStory("Дима нарисовал " + Counted(a, "звезду", "звезды", "звёзд") +
+                        ". Потом он " + (plus ? "дорисовал ещё " : "стёр ") +
+                        Counted(step, "звезду", "звезды", "звёзд") + ".",
+                        "Сколько звёзд на рисунке?", answer);
+                case 5:
+                    return NumericStory("У поезда " + Counted(a, "вагон", "вагона", "вагонов") +
+                        ". Коля " + (plus ? "прицепил ещё " : "отцепил ") +
+                        Counted(step, "вагон", "вагона", "вагонов") + ".",
+                        "Сколько вагонов у поезда?", answer);
+                case 6:
+                    return NumericStory("На клумбе " + Counted(a, "роза", "розы", "роз") +
+                        ". Таня " + (plus ? "посадила ещё " : "срезала ") +
+                        Counted(step, "розу", "розы", "роз") + ".",
+                        "Сколько роз на клумбе?", answer);
+                case 7:
+                    return NumericStory("На столе " + Counted(a, "чашка", "чашки", "чашек") +
+                        ". Миша " + (plus ? "принёс ещё " : "унёс ") +
+                        Counted(step, "чашку", "чашки", "чашек") + ".",
+                        "Сколько чашек на столе?", answer);
+                case 8:
+                    return NumericStory("В коробке " + Counted(a, "кубик", "кубика", "кубиков") +
+                        ". Ваня " + (plus ? "положил ещё " : "вынул ") +
+                        Counted(step, "кубик", "кубика", "кубиков") + ".",
+                        "Сколько кубиков в коробке?", answer);
+                case 9:
+                    return NumericStory("Пекарь испёк " + Counted(a, "булку", "булки", "булок") +
+                        ". Потом он " + (plus ? "испёк ещё " : "продал ") +
+                        Counted(step, "булку", "булки", "булок") + ".",
+                        "Сколько булок у пекаря?", answer);
+                case 10:
+                    return NumericStory("Петя поймал " + Counted(a, "рыбу", "рыбы", "рыб") +
+                        ". Потом он " + (plus ? "поймал ещё " : "отпустил ") +
+                        Counted(step, "рыбу", "рыбы", "рыб") + ".",
+                        "Сколько рыб у Пети?", answer);
+                case 11:
+                    return NumericStory("В лесу Маша нашла " + Counted(a, "гриб", "гриба", "грибов") +
+                        ". Потом она " + (plus ? "нашла ещё " : "отдала брату ") +
+                        Counted(step, "гриб", "гриба", "грибов") + ".",
+                        "Сколько грибов у Маши?", answer);
+                default:
+                    throw new ArgumentOutOfRangeException("kind");
+            }
+        }
+
+        private static string Counted(int number, string one, string few, string many)
+        {
+            return number.ToString(CultureInfo.InvariantCulture) + " " + Form(number, one, few, many);
         }
 
         private static GradedCard GroupsStory(int each, int count)

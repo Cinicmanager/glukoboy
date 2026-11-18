@@ -26,22 +26,34 @@ namespace Bubliklyuk
         private static List<ChoiceQuestion> Create()
         {
             List<ChoiceQuestion> cards = new List<ChoiceQuestion>();
+            // Each row has three matches for its explicit rule, then one exception.
+            // Different rules and matching trios keep the same pictures useful.
             string[] food = {
-                "syr sup tort zont", "sok syr sup myach", "tort sok syr vaza",
-                "luk sup syr kukla", "sok tort sup pila", "syr luk tort lodka",
-                "sup sok luk shar", "tort syr luk dom", "sok luk tort miska", "sup syr sok zont" };
-            foreach (string row in food) AddOdd(cards, "Что не еда?", row, "Найди то, что нельзя есть или пить.");
+                "syr sup tort zont", "sok syr luk myach", "tort sok sup vaza",
+                "luk sup syr kukla", "sok tort luk pila", "syr luk tort lodka" };
+            foreach (string row in food) AddOdd(cards, "Что нельзя есть или пить?", row, "Найди то, что не относится к еде и напиткам.");
             string[] animals = {
-                "kot pes lisa myach", "ezh slon koza syr", "kit ryba rak vaza",
-                "sova utka osa tort", "zhuk kot pes zont", "lisa ezh koza kukla",
-                "slon kit ryba pila", "rak osa zhuk lodka", "utka sova kot sok", "pes koza lisa dom" };
-            foreach (string row in animals) AddOdd(cards, "Что не животное?", row, "Три из них — животные. Найди предмет.");
-            string[] toys = { "myach kukla shar sup", "kukla shar myach syr", "shar myach kukla luk",
-                "myach shar kukla zont", "kukla myach shar pila" };
-            foreach (string row in toys) AddOdd(cards, "Что не игрушка?", row, "Мяч, кукла и шар — игрушки. А ещё один предмет?");
-            string[] flying = { "sova utka osa kot", "utka osa sova pes", "osa sova utka lisa",
-                "sova osa utka ryba", "utka sova osa kit" };
-            foreach (string row in flying) AddOdd(cards, "Кто не летает?", row, "У трёх есть крылья. Найди того, у кого их нет.");
+                "kot pes lisa myach", "ezh slon koza syr", "kit utka rak vaza",
+                "sova koza osa tort", "zhuk kot pes zont", "lisa ezh koza kukla" };
+            foreach (string row in animals) AddOdd(cards, "Что не животное?", row, "Птицы, рыбы и насекомые — тоже животные.");
+            AddOdd(cards, "Что не живое?", "kot roza grib shar", "Живые существа питаются и растут.");
+            AddOdd(cards, "Что не живое?", "koza luk zhuk miska", "Вещи сами не растут и не питаются.");
+            AddOdd(cards, "Что не живое?", "osa ezh roza kukla", "Живое растёт. Игрушка сама не вырастет.");
+            AddOdd(cards, "Что не растёт само?", "roza grib luk pila", "Растения и грибы становятся больше. Вещи делают люди.");
+            AddOdd(cards, "Что не растёт само?", "kot slon koza dom", "Детёныши растут и становятся взрослыми.");
+            AddOdd(cards, "Что не сделано человеком?", "dom lodka kukla luna", "Найди то, что появилось в природе.");
+            AddOdd(cards, "Что не сделано человеком?", "zont pila miska grib", "Три вещи изготовили люди. А что выросло само?");
+            AddOdd(cards, "Кто не живёт в воде?", "kit ryba rak lisa", "Для трёх животных вода — родной дом.");
+            AddOdd(cards, "У кого нет крыльев?", "sova utka osa kot", "Крылья бывают и у птиц, и у насекомых.");
+            AddOdd(cards, "У кого нет крыльев?", "zhuk sova utka rak", "У жука крылья скрыты под твёрдыми надкрыльями.");
+            AddOdd(cards, "У кого нет крыльев?", "osa zhuk utka ryba", "У птиц и насекомых бывают крылья, а у рыб — плавники.");
+            AddOdd(cards, "Кто не ходит на четырёх ногах?", "pes lisa koza sova", "Вспомни, сколько ног у зверей и сколько у птиц.");
+            AddOdd(cards, "Кто не ходит на четырёх ногах?", "slon ezh kot osa", "У насекомых шесть ног.");
+            AddOdd(cards, "Кто не покрыт шерстью?", "kot pes koza ryba", "Шерсть отличается от чешуи.");
+            AddOdd(cards, "Кто не покрыт шерстью?", "lisa kot koza utka", "У птиц перья, а у этих зверей шерсть.");
+            AddOdd(cards, "Что не еда и не посуда?", "sup syr miska pila", "К этой группе подходят и еда, и посуда для неё.");
+            AddOdd(cards, "Что не еда и не посуда?", "sup tort miska zont", "Еда и посуда для неё подходят. Найди лишнее.");
+            AddOdd(cards, "Кто не живёт на суше?", "ezh slon pes kit", "Найди животное, которое живёт в море.");
             AddDescription(cards, "Кто мяукает?", "kot", "kot pes kit zhuk", "Вспомни: мяу-мяу.");
             AddDescription(cards, "Кто лает?", "pes", "pes kot sova rak", "Вспомни: гав-гав.");
             AddDescription(cards, "У кого иглы?", "ezh", "ezh lisa koza utka", "На спине у него колючки.");
@@ -54,7 +66,7 @@ namespace Bubliklyuk
             AddDescription(cards, "Что едят ложкой?", "sup", "sup syr luk zont", "Его наливают в тарелку.");
             AddDescription(cards, "Что пинают в игре?", "myach", "myach vaza pila syr", "Он круглый и может прыгать.");
             AddDescription(cards, "Во что ставят розы?", "vaza", "vaza tort zont kukla", "В неё наливают воду для цветов.");
-            AddDescription(cards, "На чём плывут по реке?", "lodka", "lodka dom shar pila", "В ней можно грести вёслами.");
+            AddDescription(cards, "На чём плывут по реке?", "lodka", "lodka dom shar pila", "Это транспорт, который ходит по воде.");
             AddDescription(cards, "Чем пилят доску?", "pila", "pila zont miska kukla", "У этого инструмента зубцы.");
             AddDescription(cards, "У кого клешни?", "rak", "rak kit koza lisa", "Он живёт в воде и ходит по дну.");
             AddPattern(cards, "circle square circle square ?", "circle", "circle square triangle star");

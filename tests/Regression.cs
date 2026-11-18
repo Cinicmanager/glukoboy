@@ -25,6 +25,7 @@ namespace Bubliklyuk
             try
             {
                 BankChecks(); ChoiceChecks(); NightChecks(); SettingsChecks();
+                LearningChecks.Run(Check, args[1]);
                 ReadingBank bank = ReadingBank.Load();
                 Check(bank.Warning.Length == 0, "Reading bank: " + bank.Warning);
                 MixChecks(bank); RenderChecks(bank, args[0]);
@@ -209,6 +210,32 @@ namespace Bubliklyuk
                     Call(form, "NewExercise", typed);
                     Set(form, "cardShownAt", -1000L); Save(form, Path.Combine(output, "reading-" + size.Width + ".png"));
                 }
+                GradedCard storyCard = GradedContent.FirstGradeSecondQuarterStory(6, 3, true, 2);
+                Exercise[] updated = {
+                    new Exercise("math", storyCard.Instruction, storyCard.Text, storyCard.Answers, true, storyCard.Question),
+                    new Exercise("math", "Реши пример", "1 + 2 + 3 = □", "6", true, ""),
+                    new Exercise("russian", "Собери слово", "со + ба + ка", "собака", false, ""),
+                    new Exercise("reading", "Прочитай", "Оса села на розу. Жук сел на лук.", "розе|роза|на розе", false, "Где оса?", "roza")
+                };
+                string[] updatedNames = { "story", "addition", "syllables", "phrase" };
+                for (int sample = 0; sample < updated.Length; sample++)
+                    using (AttackForm form = new AttackForm(settings, gen, 3, fail))
+                    {
+                        form.TopMost = false; form.Size = size;
+                        Call(form, "NewExercise", updated[sample]);
+                        Set(form, "cardShownAt", -1000L); Set(form, "appearanceStarted", -2000L);
+                        if (sample == 3)
+                        {
+                            ((TextBox)Get(form, "answer")).Text = "на розе";
+                            Check(((TextBox)Get(form, "answer")).Text == "на розе", "Answer field retains the prepositional phrase");
+                        }
+                        Save(form, Path.Combine(output, updatedNames[sample] + "-" + size.Width + ".png"));
+                        if (sample == 3)
+                        {
+                            Call(form, "SubmitAnswer", "На розе");
+                            Check((int)Get(form, "completed") == 1, "UI accepts a prepositional phrase");
+                        }
+                    }
                 foreach (NightStory story in NightStories.All)
                 {
                     settings.NightModes = story.Id;
