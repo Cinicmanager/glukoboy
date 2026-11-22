@@ -28,6 +28,8 @@ namespace Bubliklyuk
                 LearningChecks.Run(Check, args[1]);
                 ReadingBank bank = ReadingBank.Load();
                 Check(bank.Warning.Length == 0, "Reading bank: " + bank.Warning);
+                Q2ReadingChecks.Run(Check, bank);
+                AttackLengthChecks(bank);
                 MixChecks(bank); RenderChecks(bank, args[0]);
                 Console.WriteLine("PASS: " + checks + " assertions; renders: " + args[0]); return 0;
             }
@@ -148,6 +150,36 @@ namespace Bubliklyuk
                 Check(choices == (grade == 1 && level == 2 ? 15 : 0), "Choices only in grade 1 quarter 2");
             }
         }
+        private static void AttackLengthChecks(ReadingBank bank)
+        {
+            foreach (int count in new int[] { 4, 5 })
+            {
+                Settings settings = new Settings { Grade = 1, Level = 2 };
+                TaskGenerator generator = new TaskGenerator(settings, bank);
+                generator.BeginAttack(count);
+                using (AttackForm form = new AttackForm(settings, generator, count, delegate(Exception ex) { throw ex; }))
+                {
+                    form.TopMost = false;
+                    Call(form, "NewExercise", new object[] { null });
+                    for (int answer = 1; answer <= count; answer++)
+                    {
+                        Check((int)Get(form, "currentTaskIndex") == answer, "Progress shows the actual task number");
+                        Exercise exercise = (Exercise)Get(form, "exercise");
+                        if (exercise.Choice == null) Call(form, "SubmitAnswer", exercise.Answer.Split('|')[0]);
+                        else
+                        {
+                            ChoiceRound round = (ChoiceRound)Get(form, "choiceRound");
+                            Set(round, "availableAt", 0L); Call(form, "Choose", round.CorrectIndex);
+                        }
+                        Check((int)Get(form, "completed") == answer, "Exactly one completed task per answer");
+                        Set(form, "stageStarted", -2000L);
+                        Call(form, "AnimationTick", null, EventArgs.Empty);
+                        Check(Get(form, "stage").ToString() == (answer == count ? "Defeated" : "Asking"), "Victory only after all four/five tasks");
+                    }
+                    Check((float)Get(form, "barTarget") == 0f, "Final health target is zero");
+                }
+            }
+        }
         private static void Save(Form form, string path)
         {
             form.CreateControl();
@@ -178,7 +210,7 @@ namespace Bubliklyuk
             foreach (Size size in new Size[] { new Size(1366,768), new Size(1920,1080), new Size(1024,768) })
             {
                 Settings settings = new Settings { Grade = 1, Level = 2 }; TaskGenerator gen = new TaskGenerator(settings, bank);
-                using (AttackForm form = new AttackForm(settings, gen, 3, fail))
+                using (AttackForm form = new AttackForm(settings, gen, 4, fail))
                 {
                     form.TopMost = false; form.Size = size;
                     foreach (string kind in new string[] { "odd", "describe", "pattern" })
@@ -242,6 +274,30 @@ namespace Bubliklyuk
                     using (NightForm night = new NightForm(new DateTime(2026,11,16,21,0,0), new DateTime(2026,11,17,7,0,0), settings, fail))
                     { night.TopMost = false; night.Size = size; Save(night, Path.Combine(output, story.Id + "-" + size.Width + ".png")); }
                 }
+                List<GradedCard> readingSamples = bank.Data.Get(1, 2);
+                readingSamples.Sort(delegate(GradedCard a, GradedCard b) { return b.Text.Length.CompareTo(a.Text.Length); });
+                GradedCard[] threePhrases = {
+                    readingSamples.Find(delegate(GradedCard c) { return c.Picture != null; }),
+                    readingSamples.Find(delegate(GradedCard c) { return c.Picture == null; }),
+                    readingSamples.Find(delegate(GradedCard c) { return c.Question == "Что взяла Таня?"; })
+                };
+                for (int sample = 0; sample < threePhrases.Length; sample++)
+                    using (AttackForm form = new AttackForm(settings, gen, 5, fail))
+                    {
+                        GradedCard card = threePhrases[sample];
+                        if (sample == 2)
+                        {
+                            Random order = new Random(12);
+                            do { card = ReadingSentenceOrder.Shuffle(card, order); }
+                            while (!card.Text.EndsWith("Таня взяла шапку.", StringComparison.Ordinal));
+                        }
+                        form.TopMost = false; form.Size = size;
+                        Set(form, "completed", 4);
+                        Set(form, "displayedBar", 20f); Set(form, "barFrom", 20f); Set(form, "barTarget", 20f);
+                        Call(form, "NewExercise", new Exercise("reading", "Прочитай", card.Text, card.Answers, false, card.Question, card.Picture));
+                        Set(form, "cardShownAt", -1000L); Set(form, "appearanceStarted", -2000L);
+                        Save(form, Path.Combine(output, "three-phrases-" + sample + "-" + size.Width + ".png"));
+                    }
                 if (size.Width == 1366)
                     for (int variant = 0; variant < 3; variant++)
                         using (AttackForm form = new AttackForm(settings, gen, 3, fail))

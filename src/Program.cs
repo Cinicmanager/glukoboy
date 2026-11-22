@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.6.2.0")]
-[assembly: AssemblyFileVersion("1.6.2.0")]
+[assembly: AssemblyVersion("1.6.3.0")]
+[assembly: AssemblyFileVersion("1.6.3.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -122,7 +122,8 @@ namespace Bubliklyuk
             "; Глюкобой. UTF-8. После изменений перезапустите программу.\r\n" +
             "; Случайный интервал после атаки: от 1 до 1440 минут.\r\n" +
             "IntervalMin=15\r\nIntervalMax=20\r\n" +
-            "; Число заданий за атаку: 3 или 4. Можно указать одинаковые границы.\r\n" +
+            "; Число заданий за атаку: 3–4; только Grade=1, Level=2 — 4–5. Можно указать одинаковые границы.\r\n" +
+            "; Во 2-й четверти прежние 3/4 дают 4/5, 3/3 — 4/4; доступны явные 4/5, 4/4, 5/5.\r\n" +
             "TaskMin=3\r\nTaskMax=4\r\n" +
             "; Grade — класс 1..3. Задания 2–3 класса включаются здесь.\r\n" +
             "Grade=1\r\n" +
@@ -178,11 +179,12 @@ namespace Bubliklyuk
             s.IntervalMin = ReadInt(values, "IntervalMin", 15, 1, 1440);
             s.IntervalMax = ReadInt(values, "IntervalMax", 20, 1, 1440);
             if (s.IntervalMin > s.IntervalMax) { int v = s.IntervalMin; s.IntervalMin = s.IntervalMax; s.IntervalMax = v; }
-            s.TaskMin = ReadInt(values, "TaskMin", 3, 3, 4);
-            s.TaskMax = ReadInt(values, "TaskMax", 4, 3, 4);
-            if (s.TaskMin > s.TaskMax) { int v = s.TaskMin; s.TaskMin = s.TaskMax; s.TaskMax = v; }
             s.Grade = ReadInt(values, "Grade", 1, 1, 3);
             s.Level = ReadInt(values, "Level", 1, 1, 3);
+            int taskLimit = s.Grade == 1 && s.Level == 2 ? 5 : 4;
+            s.TaskMin = ReadInt(values, "TaskMin", 3, 3, taskLimit);
+            s.TaskMax = ReadInt(values, "TaskMax", 4, 3, taskLimit);
+            if (s.TaskMin > s.TaskMax) { int v = s.TaskMin; s.TaskMin = s.TaskMax; s.TaskMax = v; }
             s.MathMax = ReadInt(values, "MathMax", 10, 3, 10);
             s.IdleLeave = ReadInt(values, "IdleLeave", 60, 0, 1440);
             s.AnimationLevel = ReadInt(values, "AnimationLevel", 1, 0, 2);
@@ -209,6 +211,22 @@ namespace Bubliklyuk
                 if (days.Length > 0) s.SchoolDays = days.ToString();
             }
             return s;
+        }
+        internal int NextTaskCount(Random random)
+        {
+            bool secondQuarter = Grade == 1 && Level == 2;
+            int limit = secondQuarter ? 5 : 4;
+            int min = TaskMin >= 3 && TaskMin <= limit ? TaskMin : 3;
+            int max = TaskMax >= 3 && TaskMax <= limit ? TaskMax : 4;
+            if (min > max) { int value = min; min = max; max = value; }
+            // Translate only legacy Q2 ranges containing 3, so explicit 4/4 stays fixed.
+            // Keep this at selection time for both loaded and directly constructed settings.
+            if (secondQuarter && min == 3)
+            {
+                min = 4;
+                max = max == 3 ? 4 : 5;
+            }
+            return random.Next(min, max + 1);
         }
         private static int ReadInt(Dictionary<string, string> values, string key, int fallback, int min, int max)
         {
@@ -543,7 +561,7 @@ namespace Bubliklyuk
             try
             {
                 audio.Begin();
-                int count = random.Next(settings.TaskMin, settings.TaskMax + 1);
+                int count = settings.NextTaskCount(random);
                 generator.BeginAttack(count);
                 attack = new AttackForm(settings, generator, count, RecoverUi);
                 attack.FormClosed += OnAttackClosed;

@@ -145,10 +145,11 @@ namespace Bubliklyuk
                         fields[0].Length == 0 || fields[0].Length > 64 || ids.Contains(fields[0]))
                     { errors++; continue; }
                     int offset = legacy ? 0 : 1;
+                    if (!legacy) fields = ReadingCardCompatibility.Upgrade(fields);
                     string type = fields[2 + offset];
                     string body = fields[3 + offset];
                     string question = fields[4 + offset];
-                    string answers = legacy ? fields[5] : ReadingAnswerCompatibility.Expand(fields);
+                    string answers = fields[5 + offset];
                     string picture = fields.Length == 8 && fields[7].Length > 0 ? fields[7] : null;
                     if (type.Length == 0 || body.Length == 0 || body.Length > 400 ||
                         question.Length == 0 || question.Length > 100 ||
@@ -169,7 +170,8 @@ namespace Bubliklyuk
                     }
                     if (!valid || (!numeric && !words)) { errors++; continue; }
                     bank.cards[grade - 1, level - 1].Add(
-                        new GradedCard("reading", "Прочитай", body, question, answers, numeric, picture));
+                        new GradedCard("reading", "Прочитай", body, question, answers, numeric, picture,
+                            !legacy && ReadingCardCompatibility.CanShuffle(fields)));
                     ids.Add(fields[0]);
                 }
             }
@@ -230,7 +232,11 @@ namespace Bubliklyuk
         }
         internal void BeginAttack(int count)
         {
-            string[] order = count == 4
+            if (count < 3 || count > 5 || (count == 5 && !(grade == 1 && level == 2)))
+                throw new ArgumentOutOfRangeException("count");
+            string[] order = count == 5
+                ? new string[] { "reading", "russian", "reading", "russian", "math" }
+                : count == 4
                 ? new string[] { "reading", "russian", "reading", "math" }
                 : new string[] { "reading", "russian", "math" };
             List<string[]> choices = new List<string[]>();
@@ -262,7 +268,7 @@ namespace Bubliklyuk
         }
         internal GradedCard Next()
         {
-            if (mix.Count == 0) BeginAttack(3);
+            if (mix.Count == 0) BeginAttack(grade == 1 && level == 2 ? 4 : 3);
             string kind = mix.Dequeue();
             GradedCard card;
             if (kind == "reading") card = Draw("reading", reading.Get(grade, level));
@@ -290,7 +296,9 @@ namespace Bubliklyuk
             previous = kind;
             recent.Enqueue(card.Key);
             while (recent.Count > 12) recent.Dequeue();
-            return card;
+            // Remember the canonical card before changing sentence order, so
+            // permutations do not evade the existing recent-card protection.
+            return ReadingSentenceOrder.Shuffle(card, random);
         }
         private GradedCard Draw(string key, List<GradedCard> source)
         {

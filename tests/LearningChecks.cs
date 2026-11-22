@@ -54,8 +54,8 @@ namespace Bubliklyuk
             foreach (string bad in new string[] { "кот|", "кот|3", "на розе!", "на 3", new string('а',17) })
                 check(Parse("bad;1;2;who;Кот спит.;Кто спит?;" + bad).Get(1,2).Count == 0, "Invalid bank answer rejected");
 
-            StringBuilder old = new StringBuilder();
-            foreach (string line in DefaultReadingData.Text.Split('\n'))
+            StringBuilder old = new StringBuilder("# bank=2\n");
+            foreach (string line in ReadingCardCompatibility.PreviousSecondQuarter.Split('\n'))
             {
                 string[] fields = line.Split(';');
                 if (line.StartsWith("g1q2_") && (fields[3] == "where" || fields[3] == "whose"))
@@ -63,6 +63,11 @@ namespace Bubliklyuk
                 old.AppendLine(String.Join(";", fields));
             }
             old.AppendLine(explicitRow.TrimEnd());
+            List<GradedCard> previousRelease = Parse(ReadingCardCompatibility.PreviousSecondQuarter).Get(1,2);
+            check(previousRelease.Count == 60, "All 1.6.2 cards are upgraded");
+            for (int i = 0; i < 60; i++)
+                check(previousRelease[i].Text == cards[i].Text && previousRelease[i].Answers == cards[i].Answers,
+                    "1.6.2 upgrades both text and answers in memory");
             // Same ID as a built-in card, but the custom question/body/answers differ.
             string custom = old.ToString().Replace("g1q2_21;1;2;where;Оса на розе. Жук на маке.;Где оса?;розе|роза;osa",
                 "g1q2_21;1;2;where;Оса под розой. Жук на маке.;Где оса?;розой|под розой;osa");
@@ -81,6 +86,7 @@ namespace Bubliklyuk
                 GradedReadingBank loaded = GradedReadingBank.Load();
                 check(loaded.Warning == "" && loaded.Get(1,2).Count == 61, "Legacy bank and custom card retained");
                 for (int i=0; i<20; i++) check(GradedReadingBank.Matches(loaded.Get(1,2)[20+i], expected[i]), "Legacy phrase upgraded in memory");
+                for (int i=0; i<60; i++) check(loaded.Get(1,2)[i].Text == cards[i].Text, "Old standard text has three phrases after upgrade");
                 check(File.ReadAllText(path,Encoding.UTF8) == old.ToString(), "Bank=2 file is not rewritten during compatibility upgrade");
             }
             finally { File.WriteAllText(path, previous, new UTF8Encoding(false)); }

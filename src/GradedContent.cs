@@ -8,14 +8,15 @@ namespace Bubliklyuk
     internal sealed class GradedCard
     {
         internal readonly string Type, Instruction, Text, Question, Answers, Picture;
-        internal readonly bool Numeric;
+        internal readonly bool Numeric, ShuffleReading;
 
         internal GradedCard(string type, string instruction, string text, string question,
-            string answers, bool numeric, string picture = null)
+            string answers, bool numeric, string picture = null, bool shuffleReading = false)
         {
             Type = type; Instruction = instruction; Text = text;
             Question = question; Answers = answers; Numeric = numeric;
             Picture = String.IsNullOrEmpty(picture) ? null : picture;
+            ShuffleReading = shuffleReading;
         }
 
         internal string Key { get { return Type + "|" + Text + "|" + Question; } }
