@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.6.3.0")]
-[assembly: AssemblyFileVersion("1.6.3.0")]
+[assembly: AssemblyVersion("1.6.4.0")]
+[assembly: AssemblyFileVersion("1.6.4.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -24,8 +24,10 @@ namespace Bubliklyuk
         {
             bool owner = false;
             Mutex mutex = null;
+            LaunchRequest launchRequest = null;
             try
             {
+                launchRequest = new LaunchRequest(LaunchRequest.EventName);
                 mutex = new Mutex(false, "Local\\Glukoboy.1");
                 try { owner = mutex.WaitOne(0); }
                 catch (AbandonedMutexException ex) { Diag.Log("Program.Main.WaitOne", ex); owner = true; }
@@ -35,8 +37,9 @@ namespace Bubliklyuk
                 Application.SetCompatibleTextRenderingDefault(false);
                 if (!owner)
                 {
-                    Diag.Info("startup: another instance already owns the mutex");
-                    using (StartupNotice notice = new StartupNotice("Глюкобой уже работает", 3000))
+                    launchRequest.Request();
+                    Diag.Info("startup: requested schedule check from the running instance");
+                    using (StartupNotice notice = new StartupNotice("Глюкобой уже работает. Проверяю текущий режим.", 3000))
                         Application.Run(notice);
                     return;
                 }
@@ -45,7 +48,7 @@ namespace Bubliklyuk
                 AppDomain.CurrentDomain.UnhandledException += OnFatalException;
                 Settings settings = Settings.Load();
                 LogStartup(settings);
-                context = new GameContext(settings);
+                context = new GameContext(settings, launchRequest);
                 Application.Run(context);
             }
             catch (Exception error)
@@ -65,6 +68,7 @@ namespace Bubliklyuk
                         if (owner) { try { mutex.ReleaseMutex(); } catch { } }
                         mutex.Dispose();
                     }
+                    if (launchRequest != null) launchRequest.Dispose();
                 }
             }
         }
@@ -282,7 +286,7 @@ namespace Bubliklyuk
         {
             // A full 15-minute grace period before the next night, also when
             // NightFrom is shortly after midnight. The night itself is handled
-            // first by Current(), including the parent's saved night skip.
+            // first by Current(), including the parent's current session skip.
             TimeSpan remaining = NextStart(s, now) - now;
             return remaining > TimeSpan.Zero && remaining <= TimeSpan.FromMinutes(15);
         }
@@ -291,6 +295,8 @@ namespace Bubliklyuk
     internal sealed class GameContext : ApplicationContext
     {
         private readonly Settings settings;
+        private readonly LaunchRequest launchRequest;
+        private readonly NightSession nightSession = new NightSession();
         private readonly TaskGenerator generator;
         private readonly Random random = new Random();
         private readonly System.Windows.Forms.Timer cycleTimer;
@@ -304,7 +310,6 @@ namespace Bubliklyuk
         private SchoolForm school;
         private DateTime schoolSkipUntil = DateTime.MinValue;
         private bool waitingForSchool;
-        private DateTime skipUntil = DateTime.MinValue;
         private DateTime warnedStart = DateTime.MinValue;
         private bool waitingForMorning;
         private bool waitingForInput;
@@ -315,9 +320,10 @@ namespace Bubliklyuk
         private bool showingFailureNotice;
         private long lastFailureNotice;
 
-        internal GameContext(Settings settings)
+        internal GameContext(Settings settings, LaunchRequest launchRequest)
         {
             this.settings = settings;
+            this.launchRequest = launchRequest;
             ReadingBank bank = ReadingBank.Load();
             bankWarning = bank.Warning;
             generator = new TaskGenerator(settings, bank);
@@ -333,13 +339,6 @@ namespace Bubliklyuk
             try
             {
                 DateTime saved;
-                if (DateTime.TryParseExact(File.ReadAllText(Settings.FilePath("night-state.txt"), Encoding.UTF8).Trim(),
-                    "s", CultureInfo.InvariantCulture, DateTimeStyles.None, out saved)) skipUntil = saved;
-            }
-            catch (Exception ex) { Diag.Log("GameContext.ctor.LoadNightState", ex); }
-            try
-            {
-                DateTime saved;
                 if (DateTime.TryParseExact(File.ReadAllText(Settings.FilePath("school-state.txt"), Encoding.UTF8).Trim(),
                     "s", CultureInfo.InvariantCulture, DateTimeStyles.None, out saved)) schoolSkipUntil = saved;
             }
@@ -350,7 +349,7 @@ namespace Bubliklyuk
         }
         private bool IsBlocked(DateTime now, out DateTime start, out DateTime end)
         {
-            return NightSchedule.Current(settings, now, out start, out end) && skipUntil != end;
+            return nightSession.IsBlocked(settings, now, out start, out end);
         }
         private bool IsSchoolWindow(DateTime now, out DateTime start, out DateTime end)
         {
@@ -399,7 +398,8 @@ namespace Bubliklyuk
                 heartbeat.Start();
                 try
                 {
-                    CheckSchedule();
+                    launchRequest.TakePending();
+                    CheckOnLaunch();
                     if (night == null && school == null && !waitingForMorning) ScheduleDay(true);
                     DateTime freeStart, freeEnd;
                     string message = night != null ? "Глюкобой запущен. Ночной режим до " + settings.NightTo.ToString(@"hh\:mm") :
@@ -437,7 +437,8 @@ namespace Bubliklyuk
         {
             try
             {
-                CheckSchedule();
+                if (launchRequest.TakePending()) CheckOnLaunch();
+                else CheckSchedule();
                 CheckIdle();
             }
             catch (Exception ex) { Diag.Log("GameContext.OnHeartbeat", ex); RecoverUi(ex); }
@@ -476,6 +477,12 @@ namespace Bubliklyuk
                 ShowNotice(message, 5000);
             }
         }
+        private void CheckOnLaunch()
+        {
+            nightSession.ResetOnLaunch();
+            Diag.Info("startup: checking current schedule at " + DateTime.Now.ToString("s", CultureInfo.InvariantCulture));
+            CheckSchedule();
+        }
         private void CheckSchedule()
         {
             if (exiting) return;
@@ -483,7 +490,8 @@ namespace Bubliklyuk
             DateTime start, end;
             if (IsBlocked(now, out start, out end))
             {
-                if (night == null || night.EndTime != end) EnterNight(start, end);
+                if (night == null || night.IsDisposed || night.EndTime != end) EnterNight(start, end);
+                else night.EnsureVisible();
                 return;
             }
             if (night != null)
@@ -597,6 +605,7 @@ namespace Bubliklyuk
         }
         private void EnterNight(DateTime start, DateTime end)
         {
+            Diag.Info("night: showing until " + end.ToString("s", CultureInfo.InvariantCulture));
             cycleTimer.Stop();
             waitingForMorning = false;
             audio.Begin(); // Idempotent: attack -> night retains the original mute.
@@ -692,20 +701,8 @@ namespace Bubliklyuk
         private void SkipNight()
         {
             if (exiting || !initialized) return;
-            DateTime start, end;
-            if (!NightSchedule.Current(settings, DateTime.Now, out start, out end) || skipUntil == end) return;
-            skipUntil = end;
-            string warning = "";
-            try
-            {
-                File.WriteAllText(Settings.FilePath("night-state.txt"), end.ToString("s", CultureInfo.InvariantCulture),
-                    new UTF8Encoding(true));
-            }
-            catch (Exception ex)
-            {
-                Diag.Log("GameContext.SkipNight.SaveState", ex);
-                warning = "Пропуск ночи действует до перезапуска: срок не удалось сохранить.";
-            }
+            DateTime end;
+            if (!nightSession.TrySkip(settings, DateTime.Now, out end)) return;
             // A hotkey can arrive just after NightFrom but before the next heartbeat.
             // End a still-visible daytime attack before releasing its audio owner.
             AttackForm oldAttack = attack;
@@ -719,8 +716,8 @@ namespace Bubliklyuk
             CloseSchool();
             audio.Restore();
             ScheduleDay(false);
-            ShowNotice("Ночь пропущена до " + end.ToString("HH:mm", CultureInfo.InvariantCulture), 3000);
-            if (warning.Length > 0) ShowInformation(warning);
+            ShowNotice("Ночь пропущена до " + end.ToString("HH:mm", CultureInfo.InvariantCulture) +
+                " или нового запуска Глюкобоя.", 5000);
         }
         internal void RecoverUi() { RecoverUi(null); }
         internal void RecoverUi(Exception error)

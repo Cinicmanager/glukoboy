@@ -106,8 +106,17 @@ namespace Bubliklyuk
         }
         private void FocusTick(object sender, EventArgs e)
         {
-            if (stopping || IsDisposed || !Visible) return;
-            try { TopMost = true; BringToFront(); Native.SetForegroundWindow(Handle); Activate(); }
+            EnsureVisible();
+        }
+        internal void EnsureVisible()
+        {
+            if (stopping || IsDisposed) return;
+            try
+            {
+                if (WindowState == FormWindowState.Minimized) WindowState = FormWindowState.Normal;
+                if (!Visible) Show();
+                TopMost = true; BringToFront(); Native.SetForegroundWindow(Handle); Activate();
+            }
             catch (Exception ex) { Diag.Log("NightForm.FocusTick", ex); Fail(ex); }
         }
         protected override void OnFormClosing(FormClosingEventArgs e)

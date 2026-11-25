@@ -24,7 +24,7 @@ namespace Bubliklyuk
             Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
             try
             {
-                BankChecks(); ChoiceChecks(); NightChecks(); SettingsChecks();
+                BankChecks(); ChoiceChecks(); NightChecks(); NightStartupChecks.Run(Check); SettingsChecks();
                 LearningChecks.Run(Check, args[1]);
                 ReadingBank bank = ReadingBank.Load();
                 Check(bank.Warning.Length == 0, "Reading bank: " + bank.Warning);
