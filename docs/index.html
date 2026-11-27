@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Глюкобой — примеры вместо ещё одного видео</title>
-  <meta name="description" content="Глюкобой 1.7.0 для Windows: личная программа для Дани, 1 класс, вторая четверть. 4–6 заданий за атаку, ровно два голосовых диктанта, математика, слоги и картинки. Работает без интернета.">
+  <meta name="description" content="Глюкобой 1.7.1 для Windows: личная программа для Дани, 1 класс, вторая четверть. 4–6 заданий за атаку, ровно два голосовых диктанта, математика, слоги и картинки. Работает без интернета.">
   <meta property="og:type" content="website">
   <meta property="og:locale" content="ru_RU">
   <meta property="og:title" content="Глюкобой — примеры вместо ещё одного видео">
@@ -30,7 +30,7 @@
         <h1>Глюкобой</h1>
         <p class="lead">Раз в 15–20 минут БублиГлюк захватывает экран. Чтобы его победить, нужно выполнить 4–6 заданий: два коротких диктанта, примеры и задания со словами или картинками.</p>
         <div class="actions"><a class="button" href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.zip">Скачать для Windows</a><a href="#install">Как поставить ↓</a></div>
-        <p class="small">Версия 1.7.0 · Голос встроен в exe, установка не нужна.</p>
+        <p class="small">Версия 1.7.1 · Голос встроен в exe, скрипт автозапуска в комплекте.</p>
         <p class="release-links"><a href="#new">БублиГлюк диктует, Даня печатает ↓</a></p>
       </div>
       <img class="hero-art" src="img/attack.webp" alt="БублиГлюк: фиолетовый одноглазый вирус с вилкой и молниями" width="520" height="520" fetchpriority="high">
@@ -95,10 +95,10 @@
     <section id="install"><div class="wrap install">
       <div><h2>Как поставить</h2><p class="small">Нужен Windows 10/11. Используется встроенный .NET Framework 4.</p><div class="needs"><h3>Как обновить</h3><ul><li>Запустите <code>Обновить.cmd</code> из папки с программой.</li><li>Если вышла новая версия, скрипт скачает её, попросит закрыть Глюкобой через <strong>Ctrl+Alt+Q</strong> и запустит заново.</li><li>Нужен интернет. Файл должен называться ровно <code>Glukoboy.exe</code>.</li><li>Папка должна быть доступна на запись. Обычная папка подойдёт, <code>Program Files</code> — нет.</li></ul></div></div>
       <ol>
-        <li><a href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.zip">Скачайте Glukoboy.zip</a> и распакуйте в отдельную папку. Внутри <code>Glukoboy.exe</code>, <code>Обновить.cmd</code> и <code>update.ps1</code>.</li>
+        <li><a href="https://github.com/Cinicmanager/glukoboy/releases/latest/download/Glukoboy.zip">Скачайте Glukoboy.zip</a> и распакуйте в отдельную папку. Внутри программа, ручной обновлятор и скрипты автозапуска.</li>
         <li>Запустите exe. Отсутствующий <code>settings.ini</code> появится сам; задания, голос и картинки уже встроены. Выбирать класс или уровень не нужно.</li>
         <li>При желании измените расписание в <code>settings.ini</code> и перезапустите программу. Для первой атаки нажмите <strong>Ctrl+Alt+B</strong>. Выход — <strong>Ctrl+Alt+Q</strong>.</li>
-        <li>Для автозапуска нажмите <strong>Win+R</strong>, введите <code>shell:startup</code> и положите в открывшуюся папку ярлык на exe.</li>
+        <li>Для автозапуска один раз запустите <code>Включить автозапуск.cmd</code> под учётной записью ребёнка. Права администратора не нужны. После обычного обновления скрипт появится рядом с exe. Если перенесёте папку программы, запустите его снова.</li>
       </ol>
     </div></section>
     <section id="settings"><div class="wrap install">

@@ -11,6 +11,7 @@ if not exist "%CSC%" (
 set "RESOURCES="
 for %%F in ("resources\*.png") do if exist "%%~F" set "RESOURCES=!RESOURCES! -resource:"%%~F","%%~nxF""
 for %%F in ("resources\*.wav") do if exist "%%~F" set "RESOURCES=!RESOURCES! -resource:"%%~F","%%~nxF""
+for %%F in ("src\*.cmd" "src\startup.ps1") do set "RESOURCES=!RESOURCES! -resource:"%%~F","%%~nxF""
 "%CSC%" -nologo -nowarn:108 -target:winexe -out:Glukoboy.exe -r:System.Windows.Forms.dll -r:System.Drawing.dll !RESOURCES! src\*.cs
 set "CSC_RESULT=%ERRORLEVEL%"
 if not "%CSC_RESULT%"=="0" exit /b %CSC_RESULT%

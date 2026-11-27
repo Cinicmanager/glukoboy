@@ -30,6 +30,7 @@ namespace Bubliklyuk
                 Check(bank.Warning.Length == 0, "Reading bank: " + bank.Warning);
                 Q2ReadingChecks.Run(Check, bank);
                 DictationChecks.Run(Check);
+                StartupHelperChecks.Run(Check, args[0]);
                 AudioChecks.Run(Check);
                 AudioChecks.RunNativeReadOnly(Check);
                 AttackLengthChecks(bank);

@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.7.0.0")]
-[assembly: AssemblyFileVersion("1.7.0.0")]
+[assembly: AssemblyVersion("1.7.1.0")]
+[assembly: AssemblyFileVersion("1.7.1.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -46,6 +46,7 @@ namespace Bubliklyuk
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
                 Application.ThreadException += OnThreadException;
                 AppDomain.CurrentDomain.UnhandledException += OnFatalException;
+                StartupHelperFiles.Ensure(AppDomain.CurrentDomain.BaseDirectory);
                 Settings settings = Settings.Load();
                 LogStartup(settings);
                 context = new GameContext(settings, launchRequest);
