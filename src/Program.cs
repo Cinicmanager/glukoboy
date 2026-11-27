@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.6.4.0")]
-[assembly: AssemblyFileVersion("1.6.4.0")]
+[assembly: AssemblyVersion("1.7.0.0")]
+[assembly: AssemblyFileVersion("1.7.0.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -105,10 +105,10 @@ namespace Bubliklyuk
     {
         internal int IntervalMin = 15;
         internal int IntervalMax = 20;
-        internal int TaskMin = 3;
-        internal int TaskMax = 4;
+        internal int TaskMin = 4;
+        internal int TaskMax = 6;
         internal int Grade = 1;
-        internal int Level = 1;
+        internal int Level = 2;
         internal int MathMax = 10;
         internal TimeSpan NightFrom = new TimeSpan(21, 0, 0);
         internal TimeSpan NightTo = new TimeSpan(7, 0, 0);
@@ -126,14 +126,9 @@ namespace Bubliklyuk
             "; Глюкобой. UTF-8. После изменений перезапустите программу.\r\n" +
             "; Случайный интервал после атаки: от 1 до 1440 минут.\r\n" +
             "IntervalMin=15\r\nIntervalMax=20\r\n" +
-            "; Число заданий за атаку: 3–4; только Grade=1, Level=2 — 4–5. Можно указать одинаковые границы.\r\n" +
-            "; Во 2-й четверти прежние 3/4 дают 4/5, 3/3 — 4/4; доступны явные 4/5, 4/4, 5/5.\r\n" +
-            "TaskMin=3\r\nTaskMax=4\r\n" +
-            "; Grade — класс 1..3. Задания 2–3 класса включаются здесь.\r\n" +
-            "Grade=1\r\n" +
-            "; Level — уровень 1..3 внутри выбранного класса. Родитель повышает вручную.\r\n" +
-            "; Для 1 класса Level = четверть: 1 — начало года, 2 — вторая четверть (короткие слова и картинки), 3 — третья и дальше.\r\n" +
-            "Level=1\r\n" +
+            "; Число заданий за атаку: 4–6, всегда два диктанта.\r\n" +
+            "TaskMin=4\r\nTaskMax=6\r\n" +
+            "; Одна сложность: 1 класс, вторая четверть. Старые Grade и Level игнорируются.\r\n" +
             "; MathMax действует только в 1 классе, от 3 до 10; шаги 1–3.\r\n" +
             "MathMax=10\r\n" +
             "; Ночь по местному времени, формат ЧЧ:ММ.\r\n" +
@@ -183,11 +178,10 @@ namespace Bubliklyuk
             s.IntervalMin = ReadInt(values, "IntervalMin", 15, 1, 1440);
             s.IntervalMax = ReadInt(values, "IntervalMax", 20, 1, 1440);
             if (s.IntervalMin > s.IntervalMax) { int v = s.IntervalMin; s.IntervalMin = s.IntervalMax; s.IntervalMax = v; }
-            s.Grade = ReadInt(values, "Grade", 1, 1, 3);
-            s.Level = ReadInt(values, "Level", 1, 1, 3);
-            int taskLimit = s.Grade == 1 && s.Level == 2 ? 5 : 4;
-            s.TaskMin = ReadInt(values, "TaskMin", 3, 3, taskLimit);
-            s.TaskMax = ReadInt(values, "TaskMax", 4, 3, taskLimit);
+            s.Grade = 1;
+            s.Level = 2;
+            s.TaskMin = ReadInt(values, "TaskMin", 4, 3, 6);
+            s.TaskMax = ReadInt(values, "TaskMax", 6, 3, 6);
             if (s.TaskMin > s.TaskMax) { int v = s.TaskMin; s.TaskMin = s.TaskMax; s.TaskMax = v; }
             s.MathMax = ReadInt(values, "MathMax", 10, 3, 10);
             s.IdleLeave = ReadInt(values, "IdleLeave", 60, 0, 1440);
@@ -218,18 +212,13 @@ namespace Bubliklyuk
         }
         internal int NextTaskCount(Random random)
         {
-            bool secondQuarter = Grade == 1 && Level == 2;
-            int limit = secondQuarter ? 5 : 4;
-            int min = TaskMin >= 3 && TaskMin <= limit ? TaskMin : 3;
-            int max = TaskMax >= 3 && TaskMax <= limit ? TaskMax : 4;
+            int min = TaskMin >= 3 && TaskMin <= 6 ? TaskMin : 4;
+            int max = TaskMax >= 3 && TaskMax <= 6 ? TaskMax : 6;
             if (min > max) { int value = min; min = max; max = value; }
-            // Translate only legacy Q2 ranges containing 3, so explicit 4/4 stays fixed.
-            // Keep this at selection time for both loaded and directly constructed settings.
-            if (secondQuarter && min == 3)
-            {
-                min = 4;
-                max = max == 3 ? 4 : 5;
-            }
+            // Old default ranges become 4–6; deliberately fixed counts stay fixed.
+            if (min < max && min <= 4 && max <= 5) max = 6;
+            min = Math.Max(4, min);
+            max = Math.Max(min, max);
             return random.Next(min, max + 1);
         }
         private static int ReadInt(Dictionary<string, string> values, string key, int fallback, int min, int max)
@@ -324,9 +313,8 @@ namespace Bubliklyuk
         {
             this.settings = settings;
             this.launchRequest = launchRequest;
-            ReadingBank bank = ReadingBank.Load();
-            bankWarning = bank.Warning;
-            generator = new TaskGenerator(settings, bank);
+            bankWarning = "";
+            generator = new TaskGenerator(settings);
             cycleTimer = new System.Windows.Forms.Timer();
             cycleTimer.Tick += OnCycle;
             heartbeat = new System.Windows.Forms.Timer();
@@ -568,7 +556,7 @@ namespace Bubliklyuk
             openingAttack = true;
             try
             {
-                audio.Begin();
+                audio.BeginAttack();
                 int count = settings.NextTaskCount(random);
                 generator.BeginAttack(count);
                 attack = new AttackForm(settings, generator, count, RecoverUi);

@@ -29,6 +29,9 @@ namespace Bubliklyuk
                 ReadingBank bank = ReadingBank.Load();
                 Check(bank.Warning.Length == 0, "Reading bank: " + bank.Warning);
                 Q2ReadingChecks.Run(Check, bank);
+                DictationChecks.Run(Check);
+                AudioChecks.Run(Check);
+                AudioChecks.RunNativeReadOnly(Check);
                 AttackLengthChecks(bank);
                 MixChecks(bank); RenderChecks(bank, args[0]);
                 Console.WriteLine("PASS: " + checks + " assertions; renders: " + args[0]); return 0;
@@ -141,18 +144,19 @@ namespace Bubliklyuk
                     for (int i = 0; i < 4; i++)
                     {
                         Exercise card = gen.Next();
-                        if (card.Kind == "reading") reading++; if (card.Kind == "math") math++;
+                        if (card.Kind == "dictation") reading++; if (card.Kind == "math") math++;
+                        Check(card.Kind != "reading", "Reading-comprehension cards removed from active attacks");
                         if (card.Choice != null) choices++;
                         Check(card.Matches(card.Answer.Split('|')[0]), "Generated answer accepted");
                     }
-                    Check(reading == 2 && math == 1, "Reading and math retained");
+                    Check(reading == 2 && math == 1, "Exactly two dictations and mathematics retained");
                 }
-                Check(choices == (grade == 1 && level == 2 ? 15 : 0), "Choices only in grade 1 quarter 2");
+                Check(choices == 15, "Only the current difficulty is used, irrespective of legacy settings");
             }
         }
         private static void AttackLengthChecks(ReadingBank bank)
         {
-            foreach (int count in new int[] { 4, 5 })
+            foreach (int count in new int[] { 4, 5, 6 })
             {
                 Settings settings = new Settings { Grade = 1, Level = 2 };
                 TaskGenerator generator = new TaskGenerator(settings, bank);
@@ -174,7 +178,7 @@ namespace Bubliklyuk
                         Check((int)Get(form, "completed") == answer, "Exactly one completed task per answer");
                         Set(form, "stageStarted", -2000L);
                         Call(form, "AnimationTick", null, EventArgs.Empty);
-                        Check(Get(form, "stage").ToString() == (answer == count ? "Defeated" : "Asking"), "Victory only after all four/five tasks");
+                        Check(Get(form, "stage").ToString() == (answer == count ? "Defeated" : "Asking"), "Victory only after all four/five/six tasks");
                     }
                     Check((float)Get(form, "barTarget") == 0f, "Final health target is zero");
                 }
@@ -210,6 +214,35 @@ namespace Bubliklyuk
             foreach (Size size in new Size[] { new Size(1366,768), new Size(1920,1080), new Size(1024,768) })
             {
                 Settings settings = new Settings { Grade = 1, Level = 2 }; TaskGenerator gen = new TaskGenerator(settings, bank);
+                using (AttackForm form = new AttackForm(settings, gen, 6, fail))
+                {
+                    form.TopMost = false; form.Size = size;
+                    Exercise dictation = DictationBank.All[0].ToExercise();
+                    Call(form, "NewExercise", dictation);
+                    Set(form, "cardShownAt", -1000L); Set(form, "appearanceStarted", -2000L);
+                    Save(form, Path.Combine(output, "dictation-ready-" + size.Width + ".png"));
+                    Set(form, "completed", 4);
+                    Call(form, "NewExercise", dictation);
+                    TextBox field = (TextBox)Get(form, "answer");
+                    field.Text = "Паша ел сок";
+                    field.SelectionStart = 5;
+                    Check(field.MaxLength == 64 && form.ClientRectangle.Contains(field.Bounds), "Dictation sentence field fits the viewport");
+                    Check(Get(form, "dictationPlayer") == null && !(bool)Get(form, "dictationIntroPlayed"), "Hidden dictation render never creates audio");
+                    Call(form, "RepeatDictationClicked", null, EventArgs.Empty);
+                    Check(Get(form, "dictationPlayer") == null, "Hidden Repeat cannot start sound");
+                    Call(form, "SubmitAnswer", field.Text); Call(form, "SubmitAnswer", field.Text);
+                    Check(Object.ReferenceEquals(dictation, Get(form, "exercise")) && field.Text == "Паша ел сок" && field.SelectionStart == 5,
+                        "Dictation errors preserve sentence, caret and current task");
+                    Check((int)Get(form, "completed") == 4 && (string)Get(form, "resultText") == "Послушай ещё раз", "Dictation errors neither replace nor score");
+                    field.Text = "Паша ел суп.";
+                    Set(form, "cardShownAt", -1000L); Set(form, "appearanceStarted", -2000L);
+                    Save(form, Path.Combine(output, "dictation-" + size.Width + ".png"));
+                    Check(form.ClientRectangle.Contains(((Control)Get(form, "repeatDictation")).Bounds), "Repeat button within viewport");
+                    Call(form, "SubmitAnswer", "  ПАША   ел суп. ");
+                    Check((int)Get(form, "completed") == 5 && !((Control)Get(form, "repeatDictation")).Enabled, "Correct dictation scores and stops repetition control");
+                    Call(form, "NewExercise", new Exercise("math", "Реши пример", "1 + 2 + 3 = □", "6", true, ""));
+                    Check(field.MaxLength == AnswerRules.MaxLength, "Other exercises retain their original input rules");
+                }
                 using (AttackForm form = new AttackForm(settings, gen, 4, fail))
                 {
                     form.TopMost = false; form.Size = size;

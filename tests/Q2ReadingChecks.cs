@@ -67,7 +67,7 @@ namespace Bubliklyuk
             }
             GradedCard own = new GradedCard("reading", "Прочитай", "Кот ел. Потом кот пил. Затем кот спал.", "Кто спал?", "кот", false);
             check(Object.ReferenceEquals(own, ReadingSentenceOrder.Shuffle(own, new Random(1))), "Custom timeline untouched");
-            foreach (int count in new int[] { 4, 5 })
+            foreach (int count in new int[] { 4, 5, 6 })
             {
                 TaskGenerator generator = new TaskGenerator(new Settings { Grade = 1, Level = 2 }, bank);
                 for (int attack = 0; attack < 40; attack++)
@@ -78,7 +78,8 @@ namespace Bubliklyuk
                     for (int i = 0; i < count; i++)
                     {
                         Exercise exercise = generator.Next();
-                        if (exercise.Kind == "reading") { reading++; check(exercise.Text.Split('.').Length == 4, "Generated reading has three phrases"); }
+                        if (exercise.Kind == "dictation") reading++;
+                        check(exercise.Kind != "reading", "Comprehension cards stay outside active attacks");
                         if (exercise.Kind == "math") math++;
                         if (exercise.Kind == "syllables") syllables++;
                         if (exercise.Choice != null) choices++;
@@ -86,19 +87,20 @@ namespace Bubliklyuk
                         check(kind != previous, "Subjects alternate within an attack"); previous = kind;
                         check(exercise.Matches(exercise.Answer.Split('|')[0]), "Generated exercise keeps its correct answer");
                     }
-                    check(reading == 2 && math == 1 && syllables + choices == count - 3, "Four/five task mix stays complete");
-                    if (count == 5) check(syllables == 1 && choices == 1, "Five tasks include both syllables and choices");
+                    check(reading == 2 && math == (count == 6 ? 2 : 1), "Every attack has exactly two dictations and mathematics");
+                    if (count >= 5) check(syllables == 1 && choices == 1, "Longer attacks include both syllables and choices");
                 }
             }
             // Exercise the full generator, not just the shuffle helper, across deck refills.
-            TaskGenerator draw = new TaskGenerator(new Settings { Grade = 1, Level = 2 }, bank);
+            // Preserve the archived bank's integrity without putting it into active attacks.
+            GradedGenerator draw = new GradedGenerator(1, 2, 10, bank.Data);
             HashSet<string> targetOrders = new HashSet<string>();
             for (int i = 0; i < 180; i++)
             {
                 draw.BeginAttack(4);
                 for (int j = 0; j < 4; j++)
                 {
-                    Exercise card = draw.Next();
+                    GradedCard card = draw.Next();
                     if (card.Question == "Что взяла Таня?") targetOrders.Add(card.Text);
                 }
             }
@@ -117,7 +119,7 @@ namespace Bubliklyuk
         }
         private static void Counts(Action<bool, string> check)
         {
-            int[,] ranges = { { 3,4,4,5 }, { 3,3,4,4 }, { 4,4,4,4 }, { 4,5,4,5 }, { 5,5,5,5 }, { 3,5,4,5 }, { 5,4,4,5 }, { 4,3,4,5 } };
+            int[,] ranges = { { 3,4,4,6 }, { 3,3,4,4 }, { 4,4,4,4 }, { 4,5,4,6 }, { 5,5,5,5 }, { 3,5,4,6 }, { 5,4,4,6 }, { 4,3,4,6 }, { 4,6,4,6 }, { 6,6,6,6 }, { 5,6,5,6 } };
             string path = Settings.FilePath("settings.ini");
             byte[] previous = File.ReadAllBytes(path);
             try
@@ -132,10 +134,11 @@ namespace Bubliklyuk
                 }
                 for (int grade = 1; grade <= 3; grade++) for (int level = 1; level <= 3; level++)
                 {
-                    bool q2 = grade == 1 && level == 2;
-                    Range(check, new Settings { Grade = grade, Level = level }, q2 ? 4 : 3, q2 ? 5 : 4);
+                    Range(check, new Settings { Grade = grade, Level = level }, 4, 6);
                     File.WriteAllText(path, "Grade=" + grade + "\nLevel=" + level + "\n", new UTF8Encoding(false));
-                    Range(check, Settings.Load(), q2 ? 4 : 3, q2 ? 5 : 4);
+                    Settings loaded = Settings.Load();
+                    Range(check, loaded, 4, 6);
+                    check(loaded.Grade == 1 && loaded.Level == 2, "Old level settings cannot enable other difficulties");
                 }
             }
             finally { File.WriteAllBytes(path, previous); }

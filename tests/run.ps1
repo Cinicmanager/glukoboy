@@ -7,6 +7,7 @@ if (-not (Test-Path -LiteralPath $compiler)) { $compiler = Join-Path $env:WINDIR
 $exePath = Join-Path $checkPath 'Regression.exe'
 $compilerArgs = @('-nologo','-nowarn:108','-target:exe','-main:Bubliklyuk.Regression',('-out:' + $exePath),'-r:System.Windows.Forms.dll','-r:System.Drawing.dll')
 $compilerArgs += @(Get-ChildItem -LiteralPath (Join-Path $repoPath 'resources') -Filter '*.png' | ForEach-Object { '-resource:' + $_.FullName + ',' + $_.Name })
+$compilerArgs += @(Get-ChildItem -LiteralPath (Join-Path $repoPath 'resources') -Filter '*.wav' | ForEach-Object { '-resource:' + $_.FullName + ',' + $_.Name })
 $compilerArgs += @(Get-ChildItem -LiteralPath (Join-Path $repoPath 'src') -Filter '*.cs' | ForEach-Object { $_.FullName })
 $compilerArgs += @(Get-ChildItem -LiteralPath $PSScriptRoot -Filter '*.cs' | ForEach-Object { $_.FullName })
 & $compiler @compilerArgs

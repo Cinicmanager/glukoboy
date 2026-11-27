@@ -112,6 +112,7 @@ namespace Bubliklyuk
             answer.KeyDown += AnswerKeyDown;
             answer.Enter += InputFocusChanged;
             answer.Leave += InputFocusChanged;
+            answer.TextChanged += AnswerTextChanged;
 
             submit = new ActionButton();
             submit.Text = "Отбить!";
@@ -121,6 +122,7 @@ namespace Bubliklyuk
             Controls.Add(submit);
             AcceptButton = submit;
             CreateChoiceControls();
+            CreateDictationControls();
 
             animationTimer = new System.Windows.Forms.Timer();
             animationTimer.Interval = animationLevel == 0 ? 100 : animationLevel == 1 ? 33 : 16;
@@ -143,6 +145,7 @@ namespace Bubliklyuk
                 appearanceStarted = clock.ElapsedMilliseconds;
                 phraseStarted = appearanceStarted;
                 nextGlitchAt = appearanceStarted + random.Next(2000, 4001);
+                dictationPlaybackEnabled = true;
                 NewExercise();
                 animationTimer.Start();
                 focusTimer.Start();
@@ -165,7 +168,7 @@ namespace Bubliklyuk
             if (scale <= 0) scale = 1;
             originX = (ClientSize.Width - 1920 * scale) / 2;
             originY = (ClientSize.Height - 1080 * scale) / 2;
-            float inputSize = Math.Max(24, 48 * scale);
+            float inputSize = DictationInputSize();
             if (inputFont == null || inputFont.Size != inputSize)
             {
                 Font newInput = new Font("Segoe UI", inputSize, FontStyle.Regular, GraphicsUnit.Pixel);
@@ -197,21 +200,27 @@ namespace Bubliklyuk
                     newButton.Dispose();
                 }
             }
-            // Both controls share the same outer 112-unit row. The native single-line
-            // editor is vertically centered inside a separately painted rounded frame.
-            RectangleF field = R(791, AnswerRowY, 620, 112);
+            // The native single-line editor is centered inside its rounded frame.
+            // Dictation has a wider field and places the action buttons below it.
+            RectangleF field = AnswerFieldBounds();
             int textHeight = answer.PreferredHeight;
             answer.Bounds = new Rectangle((int)Math.Round(field.X + 24 * scale),
                 (int)Math.Round(field.Y + (field.Height - textHeight) / 2),
                 Math.Max(1, (int)Math.Round(field.Width - 48 * scale)), textHeight);
-            submit.Bounds = Rectangle.Round(R(1439, AnswerRowY, 312, 112));
+            submit.Bounds = Rectangle.Round(R(1439, IsDictation ? 744 : AnswerRowY, 312, IsDictation ? 100 : 112));
             LayoutChoiceControls();
+            LayoutDictationControls();
             Invalidate();
         }
 
         private void InputFocusChanged(object sender, EventArgs e)
         {
-            if (!stopping) Invalidate(Rectangle.Ceiling(R(785, AnswerRowY - 6, 632, 124)));
+            if (!stopping)
+            {
+                RectangleF frame = AnswerFieldBounds();
+                frame.Inflate(6 * scale, 6 * scale);
+                Invalidate(Rectangle.Ceiling(frame));
+            }
         }
 
         private void SetPhrase(string text)
@@ -222,8 +231,10 @@ namespace Bubliklyuk
 
         private void NewExercise(Exercise replacement = null)
         {
+            StopDictation();
             exercise = replacement ?? generator.Next();
             SetUpChoice();
+            SetUpDictation();
             pictureImage = exercise.Picture == null ? null : GetImage("pic_" + exercise.Picture + ".png");
             LayoutScene();
             currentTaskIndex = completed + 1;
@@ -242,6 +253,7 @@ namespace Bubliklyuk
             submit.Enabled = true;
             if (!IsChoice) answer.Focus();
             Invalidate();
+            StartDictation();
         }
 
         private void AnswerKeyDown(object sender, KeyEventArgs e)
@@ -275,15 +287,16 @@ namespace Bubliklyuk
                     angryStarted = clock.ElapsedMilliseconds;
                     laughStarted = angryStarted + 500;
                     cardShakeStarted = angryStarted;
-                    SetPhrase(exercise.Kind == "math" ? "Хм. Пересчитай ещё раз" : "Хм. Прочитай ещё раз");
+                    SetPhrase(IsDictation ? "Послушай ещё раз" : exercise.Kind == "math" ? "Хм. Пересчитай ещё раз" : "Хм. Прочитай ещё раз");
                     // Also fits reading exercises: the explicit prompt remains unchanged.
-                    resultText = "Попробуй ещё";
+                    resultText = IsDictation ? "Послушай ещё раз" : "Попробуй ещё";
                     wrongAnswer = true;
                     answer.Focus();
-                    answer.SelectAll();
+                    if (!IsDictation) answer.SelectAll();
                     Invalidate();
                     return;
                 }
+                StopDictation();
                 completed++;
                 hitVariant = (hitVariant + 1) % 3;
                 correctStreak++;
@@ -381,6 +394,8 @@ namespace Bubliklyuk
                 Invalidate(Rectangle.Ceiling(R(48, 788, 592, 184)));
                 if (pictureImage != null && stage != Stage.Defeated)
                     Invalidate(Rectangle.Ceiling(R(740, exercise.LongText ? 345 : 276, 262, 266)));
+                if (IsDictation && stage == Stage.Asking && animationLevel > 0)
+                    Invalidate(Rectangle.Ceiling(R(1170, 380, 200, 150)));
                 if (cardEntering)
                 {
                     Invalidate(Rectangle.Ceiling(R(680, 210, 1302, 752)));
@@ -473,7 +488,8 @@ namespace Bubliklyuk
             BringToFront();
             Native.SetForegroundWindow(Handle);
             Activate();
-            if (stage == Stage.Asking && !IsChoice && answer.Enabled && !help.Focused) answer.Focus();
+            if (stage == Stage.Asking && !IsChoice && answer.Enabled && !help.Focused &&
+                (repeatDictation == null || !repeatDictation.Focused)) answer.Focus();
         }
 
         protected override void OnPaint(PaintEventArgs e)
@@ -497,7 +513,7 @@ namespace Bubliklyuk
 
                 if (!IsChoice && stage != Stage.Defeated)
                 {
-                    RectangleF field = R(791, AnswerRowY, 620, 112);
+                    RectangleF field = AnswerFieldBounds();
                     using (GraphicsPath path = Rounded(field, 22 * scale))
                     using (SolidBrush brush = new SolidBrush(Color.White))
                     using (Pen border = new Pen(answer.Focused && answer.Enabled ? Mint : Ink, Math.Max(2, 3 * scale)))
@@ -513,10 +529,10 @@ namespace Bubliklyuk
                 Color resultColor = wrongAnswer ? Color.FromArgb(122, 54, 128) : Color.FromArgb(24, 103, 86);
                 bool longCard = exercise != null && exercise.LongText;
                 DrawText(g, resultText, 28, FontStyle.Bold, resultColor,
-                    R(746, IsChoice || longCard ? 780 : 712, 1050, 96), true);
+                    R(746, IsDictation ? 672 : IsChoice || longCard ? 780 : 712, 1050, IsDictation ? 62 : 96), true);
                 if (stage != Stage.Defeated)
-                    DrawText(g, IsChoice ? "Нажми на верный ответ" : "Введи ответ → Enter", 26, FontStyle.Regular, Ink,
-                        R(766, 884, 760, 48), true);
+                    DrawText(g, IsChoice ? "Нажми на верный ответ" : IsDictation ? "Введи предложение → Enter" : "Введи ответ → Enter", 26, FontStyle.Regular, Ink,
+                        R(766, 884, IsDictation ? 1010 : 760, 48), true);
                 g.Restore(cardText);
                 DrawCardCelebration(g, now);
                 DrawWave(g, now);
@@ -532,6 +548,7 @@ namespace Bubliklyuk
                 // Do not destroy a native window while its WM_PAINT is being dispatched.
                 if (!stopping)
                 {
+                    StopDictation();
                     StopTimers();
                     BeginInvoke(new Action(delegate { Fail(ex); }));
                 }
@@ -586,6 +603,7 @@ namespace Bubliklyuk
                     DrawText(g, "Ты отбил атаку", 68, FontStyle.Bold, Ink, R(766, 396, 1010, 120), true, 84);
                 }
                 else if (IsChoice) DrawChoiceQuestion(g);
+                else if (IsDictation) DrawDictationQuestion(g, now, ink);
                 else if (exercise != null && exercise.LongText)
                 {
                     DrawParagraph(g, exercise.Text, Math.Max(24, 36 * scale), ink, R(textX, 300, textWidth, 232));
@@ -1197,12 +1215,16 @@ namespace Bubliklyuk
         private void Fail(Exception ex)
         {
             if (stopping) return;
+            dictationPlaybackEnabled = false;
+            StopDictation();
             failure(ex);
         }
 
         internal void Abort()
         {
             stopping = true;
+            dictationPlaybackEnabled = false;
+            StopDictation();
             StopTimers();
             try { Close(); }
             finally { Dispose(); }
@@ -1211,6 +1233,8 @@ namespace Bubliklyuk
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             stopping = true;
+            dictationPlaybackEnabled = false;
+            StopDictation();
             StopTimers();
             base.OnFormClosed(e);
         }
@@ -1220,6 +1244,8 @@ namespace Bubliklyuk
             if (disposing)
             {
                 stopping = true;
+                dictationPlaybackEnabled = false;
+                DisposeDictation();
                 StopTimers();
                 if (animationTimer != null) animationTimer.Dispose();
                 if (focusTimer != null) focusTimer.Dispose();
