@@ -18,7 +18,7 @@ namespace GlukoboyDiagnostics
         private const int MaximumSourceDirectories = 16;
         private const int MaximumAppLogBytes = 100 * 1024;
         private const int MaximumSettingsBytes = 32 * 1024;
-        private const long MaximumJournalBytes = 20 * 1024 * 1024 - 32 * 1024;
+        private const long MaximumJournalBytes = 20 * 1024 * 1024 - 64 * 1024;
         private readonly object gate = new object();
         private readonly JavaScriptSerializer serializer = new JavaScriptSerializer();
         private readonly UTF8Encoding utf8 = new UTF8Encoding(false);

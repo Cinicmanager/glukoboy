@@ -15,6 +15,16 @@ namespace GlukoboyDiagnostics
 
         internal static string Create(string reportDirectory, string outputDirectory, bool partial)
         {
+            return CreateCore(reportDirectory, outputDirectory, partial, null);
+        }
+
+        internal static string CreateBackground(string captureRoot, string outputDirectory, bool partial)
+        {
+            return CreateCore(captureRoot, outputDirectory, partial, new BackgroundCaptureStore(captureRoot));
+        }
+
+        private static string CreateCore(string reportDirectory, string outputDirectory, bool partial, BackgroundCaptureStore automatic)
+        {
             string sourceRoot = NormalizeDirectory(reportDirectory);
             string outputRoot = NormalizeDirectory(outputDirectory);
             RequireLocalDrive(sourceRoot);
@@ -33,8 +43,44 @@ namespace GlukoboyDiagnostics
             int included = 0;
             int skipped = 0;
             long copiedBytes = 0;
+            long maximumSourceBytes = automatic == null ? MaximumBytes - MetadataReserveBytes : BackgroundCaptureStore.MaximumSessions * BackgroundCaptureStore.MaximumSessionBytes;
             List<string> warnings = new List<string>();
             if (partial) warnings.Add("Сборщик не завершил все проверки либо сообщил об ошибке. Сохранён доступный снимок файлов.");
+            List<SourceFile> sources = new List<SourceFile>();
+            int sessionCount = 0;
+            if (automatic == null)
+            {
+                foreach (string file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.TopDirectoryOnly))
+                    sources.Add(new SourceFile(file, Path.GetFileName(file)));
+            }
+            else
+            {
+                bool ignored;
+                List<string> sessions = automatic.GetSessions(out ignored);
+                if (ignored || sessions.Count > BackgroundCaptureStore.MaximumSessions)
+                {
+                    partial = true;
+                    warnings.Add("Часть папок пропущена: неподтверждённое происхождение, неизвестное содержимое, ссылки либо предел восьми сессий.");
+                }
+                foreach (string session in sessions)
+                {
+                    if (sessionCount >= BackgroundCaptureStore.MaximumSessions) break;
+                    sessionCount++;
+                    if (!automatic.IsComplete(session))
+                    {
+                        partial = true;
+                        warnings.Add(Path.GetFileName(session) + ": нет отметки корректного завершения; последние события этой сессии могут отсутствовать.");
+                    }
+                    // Flat, unique names keep adjacent sessions distinguishable.
+                    foreach (string sourceName in new string[] { "events.jsonl", "manifest.json", "summary.json" })
+                    {
+                        string file = Path.Combine(session, sourceName);
+                        if (File.Exists(file)) sources.Add(new SourceFile(file, Path.GetFileName(session) + "__" + sourceName));
+                        else { partial = true; skipped++; }
+                    }
+                }
+                if (sessionCount == 0) { partial = true; warnings.Add("Подтверждённых записей автоматической диагностики пока нет."); }
+            }
             try
             {
                 using (FileStream archiveFile = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
@@ -42,9 +88,10 @@ namespace GlukoboyDiagnostics
                     ownTemporary = true;
                     using (ZipArchive archive = new ZipArchive(archiveFile, ZipArchiveMode.Create, false))
                     {
-                        foreach (string file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.TopDirectoryOnly))
+                        foreach (SourceFile source in sources)
                         {
-                            string entryName = Path.GetFileName(file);
+                            string file = source.Path;
+                            string entryName = source.EntryName;
                             if (String.Equals(entryName, "README.txt", StringComparison.OrdinalIgnoreCase) ||
                                 String.Equals(entryName, "collection-state.txt", StringComparison.OrdinalIgnoreCase))
                             {
@@ -62,6 +109,7 @@ namespace GlukoboyDiagnostics
                             long initialLength = 0;
                             try
                             {
+                                RejectReparseAncestors(file, true);
                                 FileAttributes attributes = File.GetAttributes(file);
                                 if ((attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory)) != 0)
                                 {
@@ -77,7 +125,7 @@ namespace GlukoboyDiagnostics
 
                             using (input)
                             {
-                                if (initialLength > MaximumBytes - MetadataReserveBytes - copiedBytes)
+                                if (initialLength > maximumSourceBytes - copiedBytes)
                                 {
                                     skipped++;
                                     partial = true;
@@ -113,6 +161,9 @@ namespace GlukoboyDiagnostics
                         state.AppendLine("source_files_included=" + included.ToString(CultureInfo.InvariantCulture));
                         state.AppendLine("source_files_skipped=" + skipped.ToString(CultureInfo.InvariantCulture));
                         state.AppendLine("source_bytes_included=" + copiedBytes.ToString(CultureInfo.InvariantCulture));
+                        state.AppendLine("capture_mode=" + (automatic == null ? "standalone" : "automatic_background"));
+                        state.AppendLine("source_sessions_included=" + sessionCount.ToString(CultureInfo.InvariantCulture));
+                        if (automatic != null) state.AppendLine("Записи расположены от новых к старым, до восьми сессий по шесть часов / 20 МиБ. Более старые сессии удаляются автоматически; при частых перезапусках или большом потоке событий история будет короче 48 часов.");
                         state.AppendLine(partial ? "НЕПОЛНЫЙ ОТЧЁТ: используйте как доступный снимок записи; последние события могут отсутствовать." : "Сборщик завершил запись перед упаковкой отчёта.");
                         state.AppendLine("Чтение каждого файла ограничено его размером на момент открытия. В неполном отчёте последняя строка журнала может быть незавершённой.");
                         foreach (string warning in warnings) state.AppendLine(warning);
@@ -146,7 +197,7 @@ namespace GlukoboyDiagnostics
             return path.Length == root.Length ? root : path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
 
-        private static void RequireLocalDrive(string path)
+        internal static void RequireLocalDrive(string path)
         {
             string root = Path.GetPathRoot(path);
             // Reject UNC, device paths and mapped network drives before any filesystem access.
@@ -173,7 +224,12 @@ namespace GlukoboyDiagnostics
             }
         }
 
-        private static void RejectReparseAncestors(string path)
+        internal static void RejectReparseAncestors(string path)
+        {
+            RejectReparseAncestors(path, false);
+        }
+
+        internal static void RejectReparseAncestors(string path, bool allowLeafFile)
         {
             string current = Path.GetPathRoot(path);
             string remainder = path.Substring(current.Length);
@@ -187,7 +243,7 @@ namespace GlukoboyDiagnostics
                 catch (DirectoryNotFoundException) { return; }
                 if ((attributes & FileAttributes.ReparsePoint) != 0)
                     throw new IOException("Папка отчёта или сохранения не должна проходить через символическую ссылку.");
-                if ((attributes & FileAttributes.Directory) == 0)
+                if ((attributes & FileAttributes.Directory) == 0 && !(allowLeafFile && index == segments.Length - 1))
                     throw new IOException("Один из компонентов пути отчёта не является папкой.");
             }
         }
@@ -199,12 +255,20 @@ namespace GlukoboyDiagnostics
             using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(true))) writer.Write(text);
         }
 
+        private sealed class SourceFile
+        {
+            internal readonly string Path;
+            internal readonly string EntryName;
+            internal SourceFile(string path, string entryName) { Path = path; EntryName = entryName; }
+        }
+
         private const string ReadmeText =
             "ОТЧЁТ ДИАГНОСТИКИ ГЛЮКОБОЯ\r\n\r\n" +
             "Пришлите этот ZIP в чат, в котором разбираете проблему. Сам сборщик ничего не отправляет.\r\n" +
             "Сначала проверьте collection-state.txt: в нём указано, удалось ли завершить запись.\r\n\r\n" +
             "В отчёте: состояния процессов и окон, название активной программы, сообщения об ошибках Глюкобоя и его настройки расписания.\r\n" +
             "Нажатия клавиш, снимки экрана и звук не записываются. Игра не запускается и не закрывается сборщиком.\r\n" +
-            "Подпапки и символические ссылки не включаются. Предел архива: 100 файлов и 32 МиБ исходных данных вместе со служебным текстом.\r\n";
+            "В автоматическом режиме включаются до восьми последних сессий, до 160 МиБ исходных данных. Имена файлов содержат имя сессии; свежие сессии идут первыми. При обычном отдельном запуске предел — 32 МиБ. До 100 файлов, включая служебный текст.\r\n" +
+            "Неизвестные подпапки и символические ссылки не включаются. Отсутствие корректного завершения любой включённой сессии отмечено как неполный отчёт.\r\n";
     }
 }

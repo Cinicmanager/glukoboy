@@ -8,7 +8,12 @@ if not exist "%CSC%" (
     echo ERROR: .NET Framework 4 compiler was not found.
     exit /b 1
 )
-set "RESOURCES="
+rem Embed the collector so older EXE-only manual updaters deliver it too.
+call "tools\diagnostics\build.cmd"
+set "DIAGNOSTICS_RESULT=%ERRORLEVEL%"
+cd /d "%~dp0"
+if not "%DIAGNOSTICS_RESULT%"=="0" exit /b %DIAGNOSTICS_RESULT%
+set "RESOURCES=-resource:"tools\diagnostics\Glukoboy.Diagnostics.exe",Glukoboy.Diagnostics.exe"
 for %%F in ("resources\*.png") do if exist "%%~F" set "RESOURCES=!RESOURCES! -resource:"%%~F","%%~nxF""
 for %%F in ("resources\*.wav") do if exist "%%~F" set "RESOURCES=!RESOURCES! -resource:"%%~F","%%~nxF""
 for %%F in ("src\*.cmd" "src\startup.ps1") do set "RESOURCES=!RESOURCES! -resource:"%%~F","%%~nxF""

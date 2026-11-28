@@ -10,7 +10,7 @@ $fixtureExe = Join-Path $fixtureRoot 'Glukoboy.DiagnosticFixture.exe'
 if ($LASTEXITCODE -ne 0) { throw 'Fixture compilation failed' }
 $checkExe = Join-Path $testRoot 'Checks.exe'
 $arguments = @('-nologo','-target:exe',('-out:' + $checkExe),'-r:System.Windows.Forms.dll','-r:System.Drawing.dll','-r:System.Web.Extensions.dll','-r:System.IO.Compression.dll','-r:System.IO.Compression.FileSystem.dll')
-$arguments += @('Collector.cs','NativeProbe.cs','ReportPackage.cs') | ForEach-Object { Join-Path $toolRoot $_ }
+$arguments += @('Collector.cs','NativeProbe.cs','ReportPackage.cs','BackgroundCaptureStore.cs') | ForEach-Object { Join-Path $toolRoot $_ }
 $arguments += Join-Path $PSScriptRoot 'Checks.cs'
 & $compiler @arguments
 if ($LASTEXITCODE -ne 0) { throw 'Diagnostic checks compilation failed' }

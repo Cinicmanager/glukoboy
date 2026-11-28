@@ -10,5 +10,5 @@ if not exist "%CSC%" (
     exit /b 1
 )
 for %%I in ("%OUT%") do if not exist "%%~dpI" mkdir "%%~dpI"
-"%CSC%" /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 /utf8output /out:"%OUT%" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll Program.cs ReportPackage.cs Collector.cs NativeProbe.cs
+"%CSC%" /nologo /target:winexe /platform:anycpu /optimize+ /codepage:65001 /utf8output /out:"%OUT%" /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll Program.cs ReportPackage.cs BackgroundCaptureStore.cs Collector.cs NativeProbe.cs
 exit /b %ERRORLEVEL%

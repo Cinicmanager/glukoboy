@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.7.2.0")]
-[assembly: AssemblyFileVersion("1.7.2.0")]
+[assembly: AssemblyVersion("1.7.3.0")]
+[assembly: AssemblyFileVersion("1.7.3.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 
@@ -49,6 +49,7 @@ namespace Bubliklyuk
                 StartupHelperFiles.Ensure(AppDomain.CurrentDomain.BaseDirectory);
                 Settings settings = Settings.Load();
                 LogStartup(settings);
+                DiagnosticLauncher.StartInBackground();
                 context = new GameContext(settings, launchRequest);
                 Application.Run(context);
             }

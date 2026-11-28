@@ -31,6 +31,7 @@ namespace Bubliklyuk
                 Q2ReadingChecks.Run(Check, bank);
                 DictationChecks.Run(Check);
                 StartupHelperChecks.Run(Check, args[0]);
+                DiagnosticLauncherChecks.Run(Check, args[0]);
                 AudioChecks.Run(Check);
                 AttackAudioLifecycleChecks.Run(Check);
                 AudioChecks.RunNativeReadOnly(Check);

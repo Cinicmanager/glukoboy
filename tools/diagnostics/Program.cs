@@ -10,8 +10,8 @@ using System.Windows.Forms;
 
 [assembly: AssemblyTitle("Диагностика Глюкобоя")]
 [assembly: AssemblyProduct("Glukoboy Diagnostics")]
-[assembly: AssemblyDescription("Отдельный переносной сборщик диагностики Глюкобоя")]
-[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyDescription("Локальная фоновая диагностика Глюкобоя")]
+[assembly: AssemblyVersion("1.1.0.0")]
 
 namespace GlukoboyDiagnostics
 {
@@ -27,19 +27,44 @@ namespace GlukoboyDiagnostics
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
 
-            // A deterministic UI preview: no mutex, report directory, or Collector.
-            if (args.Length == 2 && args[0] == "--render")
+            bool background = args.Length == 1 && args[0] == "--background";
+            // Deterministic UI previews: no mutex, report directory, tray, or Collector.
+            if (args.Length == 2 && (args[0] == "--render" || args[0] == "--render-background"))
             {
                 try
                 {
                     string path = Path.GetFullPath(args[1]);
                     Directory.CreateDirectory(Path.GetDirectoryName(path));
-                    using (DiagnosticForm form = new DiagnosticForm(true))
+                    bool hiddenPreview = args[0] == "--render-background";
+                    using (DiagnosticForm form = new DiagnosticForm(true, hiddenPreview, null))
                     {
                         form.ShowInTaskbar = false;
                         form.StartPosition = FormStartPosition.Manual;
                         form.Location = new Point(-10000, -10000);
-                        form.Show();
+                        int shown = 0, activated = 0;
+                        form.Shown += delegate { shown++; };
+                        form.Activated += delegate { activated++; };
+                        if (hiddenPreview)
+                        {
+                            using (System.Windows.Forms.Timer previewTimer = new System.Windows.Forms.Timer())
+                            {
+                                previewTimer.Interval = 150;
+                                previewTimer.Tick += delegate { previewTimer.Stop(); Application.ExitThread(); };
+                                previewTimer.Start();
+                                RunForm(form, true);
+                            }
+                        }
+                        else { form.StartCapture(); form.Show(); Application.DoEvents(); }
+                        if (hiddenPreview)
+                        {
+                            if (form.Visible || shown != 0 || activated != 0 || form.CaptureStarted)
+                                throw new InvalidOperationException("Фоновая проверка неожиданно показала окно или начала запись.");
+                            File.WriteAllText(path + ".state.txt", "initial_visible=false\r\nshown_events=0\r\nactivation_events=0\r\ncollector_started=false\r\n");
+                            // The startup assertion above used the real hidden
+                            // message loop. Show offscreen only for the bitmap;
+                            // preview forms explicitly refuse activation.
+                            form.Show();
+                        }
                         form.Refresh();
                         using (Bitmap bitmap = new Bitmap(form.Width, form.Height))
                         {
@@ -57,23 +82,27 @@ namespace GlukoboyDiagnostics
             }
 
             Mutex singleton = null;
+            EventWaitHandle showRequest = null;
             bool ownsMutex = false;
             try
             {
                 string identity = WindowsIdentity.GetCurrent().User.Value;
+                showRequest = new EventWaitHandle(false, EventResetMode.AutoReset, "Local\\Glukoboy.Diagnostics.Show." + identity);
                 singleton = new Mutex(true, "Local\\Glukoboy.Diagnostics." + identity, out ownsMutex);
                 if (!ownsMutex)
                 {
-                    MessageBox.Show("Сборщик диагностики уже запущен. Найдите его значок рядом с часами Windows (возможно, под стрелкой скрытых значков).",
-                        "Диагностика Глюкобоя", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    if (!background) showRequest.Set();
                     return 0;
                 }
-                Application.Run(new DiagnosticForm(false));
+                using (DiagnosticForm form = new DiagnosticForm(false, background, showRequest))
+                {
+                    RunForm(form, background);
+                }
                 return 0;
             }
             catch (Exception error)
             {
-                MessageBox.Show("Не удалось открыть сборщик диагностики.\r\n\r\n" + error.Message,
+                if (!background) MessageBox.Show("Не удалось открыть сборщик диагностики.\r\n\r\n" + error.Message,
                     "Диагностика Глюкобоя", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return 1;
             }
@@ -84,6 +113,20 @@ namespace GlukoboyDiagnostics
                     if (ownsMutex) singleton.ReleaseMutex();
                     singleton.Dispose();
                 }
+                if (showRequest != null) showRequest.Dispose();
+            }
+        }
+
+        internal static void RunForm(DiagnosticForm form, bool background)
+        {
+            // Application.Run(context) automatically shows a non-null MainForm.
+            // Keep MainForm null and explicitly end the loop on this form's close.
+            using (ApplicationContext context = new ApplicationContext())
+            {
+                form.FormClosed += delegate { context.ExitThread(); };
+                form.StartCapture();
+                if (!background) form.Show();
+                Application.Run(context);
             }
         }
     }
@@ -91,6 +134,9 @@ namespace GlukoboyDiagnostics
     internal sealed class DiagnosticForm : Form
     {
         private readonly bool renderOnly;
+        private readonly bool background;
+        private readonly EventWaitHandle showRequest;
+        private readonly string automaticRoot;
         private readonly Label statusTitle;
         private readonly Label statusDetail;
         private readonly Button saveButton;
@@ -109,15 +155,21 @@ namespace GlukoboyDiagnostics
         private volatile string exportPath;
         private volatile string exportError;
         private string lastExportFailure;
-        private string reportDirectory;
+        private volatile string reportDirectory;
         private bool saving;
         private bool exportStarted;
         private bool allowClose;
         private bool balloonShown;
 
-        internal DiagnosticForm(bool preview)
+        internal DiagnosticForm(bool preview) : this(preview, false, null) { }
+
+        internal DiagnosticForm(bool preview, bool automatic, EventWaitHandle openSignal)
         {
             renderOnly = preview;
+            background = automatic;
+            showRequest = openSignal;
+            automaticRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GlukoboyDiagnostics", "AutomaticCapture");
+            ShowInTaskbar = !background;
             Text = "Диагностика Глюкобоя";
             Font = new Font("Segoe UI", 10F);
             AutoScaleMode = AutoScaleMode.Font;
@@ -153,7 +205,7 @@ namespace GlukoboyDiagnostics
             statusTitle.Location = new Point(13, 8);
             statusTitle.Size = new Size(650, 25);
             statusTitle.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-            statusDetail = MakeLabel("Окно можно свернуть. Сборщик работает отдельно от игры.", 9F, FontStyle.Regular);
+            statusDetail = MakeLabel(background ? "Диагностика запущена вместе с игрой и продолжает работать в фоне." : "Окно можно свернуть. Сборщик работает отдельно от игры.", 9F, FontStyle.Regular);
             statusDetail.Location = new Point(13, 34);
             statusDetail.Size = new Size(650, 25);
             statusDetail.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
@@ -161,7 +213,9 @@ namespace GlukoboyDiagnostics
             statusPanel.Controls.Add(statusDetail);
             layout.Controls.Add(statusPanel, 0, 1);
 
-            Label instructions = MakeLabel("1. Оставьте сборщик работать и пользуйтесь компьютером как обычно.\r\n2. Дождитесь ночного режима или момента, когда ребёнок его обойдёт.\r\n3. Подождите ещё 10–20 секунд и нажмите «Сохранить отчёт и выйти».", 10F, FontStyle.Regular);
+            Label instructions = MakeLabel(background ?
+                "1. Диагностика уже работает. Пользуйтесь компьютером как обычно.\r\n2. После проблемы подождите ещё 10–20 секунд.\r\n3. Нажмите «Сохранить отчёт и выйти» и пришлите полученный ZIP в чат." :
+                "1. Оставьте сборщик работать и пользуйтесь компьютером как обычно.\r\n2. Дождитесь ночного режима или момента, когда ребёнок его обойдёт.\r\n3. Подождите ещё 10–20 секунд и нажмите «Сохранить отчёт и выйти».", 10F, FontStyle.Regular);
             instructions.Dock = DockStyle.Fill;
             instructions.Padding = new Padding(0, 5, 0, 0);
             layout.Controls.Add(instructions, 0, 2);
@@ -171,7 +225,9 @@ namespace GlukoboyDiagnostics
             privacy.ForeColor = Color.FromArgb(67, 83, 101);
             layout.Controls.Add(privacy, 0, 3);
 
-            Label trayHint = MakeLabel("Крестик и кнопка сворачивания прячут окно в значок рядом с часами.\r\nЗапись идёт до сохранения отчёта, но не дольше 6 часов.", 8.5F, FontStyle.Regular);
+            Label trayHint = MakeLabel(background ?
+                "Крестик прячет окно в значок. Запись продолжается до сохранения отчёта.\r\nХранятся до 8 последних записей по 6 часов / 20 МиБ; старые удаляются автоматически." :
+                "Крестик и кнопка сворачивания прячут окно в значок рядом с часами.\r\nЗапись идёт до сохранения отчёта, но не дольше 6 часов.", 8.5F, FontStyle.Regular);
             trayHint.Dock = DockStyle.Fill;
             trayHint.ForeColor = Color.FromArgb(86, 101, 119);
             layout.Controls.Add(trayHint, 0, 4);
@@ -214,7 +270,10 @@ namespace GlukoboyDiagnostics
 
             uiTimer = new System.Windows.Forms.Timer();
             uiTimer.Interval = 500;
-            uiTimer.Tick += delegate { RefreshStatus(); };
+            uiTimer.Tick += delegate {
+                if (showRequest != null && showRequest.WaitOne(0)) RestoreWindow();
+                RefreshStatus();
+            };
             Resize += delegate { if (WindowState == FormWindowState.Minimized && !renderOnly) HideToTray(); };
             if (renderOnly)
             {
@@ -233,16 +292,23 @@ namespace GlukoboyDiagnostics
             return label;
         }
 
-        protected override void OnShown(EventArgs e)
+        internal bool CaptureStarted { get { return worker != null; } }
+
+        protected override bool ShowWithoutActivation { get { return renderOnly || base.ShowWithoutActivation; } }
+
+        internal void StartCapture()
         {
-            base.OnShown(e);
+            // Creating the handle does not display or activate the form. The
+            // timer and tray menu can later restore this same hidden window.
+            IntPtr unusedHandle = Handle;
+            if (worker != null) return;
             if (renderOnly)
             {
                 statusTitle.Text = "Запись идёт · 00:00:12";
                 statusDetail.Text = "Состояние Глюкобоя проверяется каждые полсекунды.";
                 return;
             }
-            reportDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            reportDirectory = background ? automaticRoot : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "GlukoboyDiagnostics", "Reports", DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N"));
             elapsed.Start();
             worker = new Thread(Collect);
@@ -256,11 +322,17 @@ namespace GlukoboyDiagnostics
         private void Collect()
         {
             Collector current = null;
+            BackgroundCaptureStore automatic = null;
             try
             {
+                if (background)
+                {
+                    automatic = new BackgroundCaptureStore(automaticRoot);
+                    reportDirectory = automatic.CreateSession();
+                }
                 current = new Collector(reportDirectory);
                 collector = current;
-                current.Note("collector", "Standalone collector started; interval 500 ms, maximum duration 6 hours.");
+                current.Note("collector", background ? "Automatic background collector started; 500 ms interval; 6 hour / 20 MiB sessions, up to 8 retained. Target exit does not stop recording." : "Standalone collector started; interval 500 ms, maximum duration 6 hours.");
                 Stopwatch duration = Stopwatch.StartNew();
                 while (!stopEvent.WaitOne(0))
                 {
@@ -271,15 +343,32 @@ namespace GlukoboyDiagnostics
                         workerError = "Не удалось записать часть данных. " + current.LastError;
                         break;
                     }
-                    if (current.IsRecordingLimitReached || duration.Elapsed >= TimeSpan.FromHours(6))
+                    if (BackgroundCaptureStore.ShouldRotate(duration.Elapsed, current.IsRecordingLimitReached))
                     {
+                        if (background)
+                        {
+                            current.Note("rotation", "Closing bounded session; automatic recording continues in the next session.");
+                            current.Dispose();
+                            if (current.IsOutputFailed) throw new IOException(current.LastError);
+                            automatic.MarkComplete(reportDirectory);
+                            current = null;
+                            collector = null;
+                            if (stopEvent.WaitOne(0)) break;
+                            reportDirectory = automatic.CreateSession();
+                            if (stopEvent.WaitOne(0)) break;
+                            current = new Collector(reportDirectory);
+                            collector = current;
+                            current.Note("rotation", "New automatic background session after duration or size rotation.");
+                            duration.Restart();
+                            continue;
+                        }
                         recordingLimitReached = true;
                         current.Note("limit", "Recording stopped because its size or duration limit was reached.");
                         break;
                     }
                     if (stopEvent.WaitOne(500)) break;
                 }
-                if (!collectorOutputFailed) current.Note("collector", "Recording loop stopped.");
+                if (!collectorOutputFailed && current != null) current.Note("collector", "Recording loop stopped.");
             }
             catch (Exception error)
             {
@@ -293,7 +382,11 @@ namespace GlukoboyDiagnostics
             {
                 if (current != null)
                 {
-                    try { current.Dispose(); }
+                    try
+                    {
+                        current.Dispose();
+                        if (automatic != null && !current.IsOutputFailed && String.IsNullOrEmpty(workerError)) automatic.MarkComplete(reportDirectory);
+                    }
                     catch (Exception error) { workerError = error.GetType().Name + ": " + error.Message; }
                     if (current.IsOutputFailed)
                     {
@@ -332,7 +425,7 @@ namespace GlukoboyDiagnostics
                 statusDetail.Text = "Собранные данные остаются на этом компьютере.";
                 return;
             }
-            statusTitle.Text = "Запись идёт · " + elapsed.Elapsed.ToString(@"hh\:mm\:ss");
+            statusTitle.Text = (background ? "Фоновая запись идёт · " : "Запись идёт · ") + ((int)elapsed.Elapsed.TotalHours).ToString("00") + elapsed.Elapsed.ToString(@"\:mm\:ss");
             Collector current = collector;
             if (current != null)
             {
@@ -369,7 +462,7 @@ namespace GlukoboyDiagnostics
             statusDetail.Text = partial ? "Не все проверки успели завершиться. Это будет отмечено в ZIP." : "Отчёт появится на рабочем столе или в папке документов.";
             Thread exporter = new Thread(delegate()
             {
-                try { exportPath = CreatePackageInAvailableFolder(reportDirectory, partial); }
+                try { exportPath = CreatePackageInAvailableFolder(background ? automaticRoot : reportDirectory, partial, background); }
                 catch (Exception error) { exportError = error.Message; }
                 finally { exportFinished = true; }
             });
@@ -378,7 +471,7 @@ namespace GlukoboyDiagnostics
             exporter.Start();
         }
 
-        private static string CreatePackageInAvailableFolder(string directory, bool partial)
+        private static string CreatePackageInAvailableFolder(string directory, bool partial, bool automatic)
         {
             string[] destinations = new string[] {
                 Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
@@ -389,7 +482,7 @@ namespace GlukoboyDiagnostics
             foreach (string destination in destinations)
             {
                 if (String.IsNullOrEmpty(destination)) continue;
-                try { return ReportPackage.Create(directory, destination, partial); }
+                try { return automatic ? ReportPackage.CreateBackground(directory, destination, partial) : ReportPackage.Create(directory, destination, partial); }
                 catch (Exception error) { lastError = error; }
             }
             throw new IOException("Не удалось создать ZIP ни в одной папке. " + (lastError == null ? "" : lastError.Message), lastError);
@@ -427,7 +520,7 @@ namespace GlukoboyDiagnostics
         {
             if (renderOnly) return;
             Hide();
-            if (!balloonShown)
+            if (!background && !balloonShown)
             {
                 balloonShown = true;
                 trayIcon.ShowBalloonTip(5000, "Диагностика Глюкобоя", "Окно скрыто. Сборщик остаётся работать. Дважды нажмите значок, чтобы сохранить отчёт.", ToolTipIcon.Info);
@@ -436,6 +529,7 @@ namespace GlukoboyDiagnostics
 
         private void RestoreWindow()
         {
+            ShowInTaskbar = true;
             Show();
             WindowState = FormWindowState.Normal;
             Activate();
