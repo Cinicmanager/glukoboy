@@ -531,7 +531,7 @@ namespace Bubliklyuk
                 DrawText(g, resultText, 28, FontStyle.Bold, resultColor,
                     R(746, IsDictation ? 672 : IsChoice || longCard ? 780 : 712, 1050, IsDictation ? 62 : 96), true);
                 if (stage != Stage.Defeated)
-                    DrawText(g, IsChoice ? "Нажми на верный ответ" : IsDictation ? "Введи предложение → Enter" : "Введи ответ → Enter", 26, FontStyle.Regular, Ink,
+                    DrawText(g, IsChoice ? "Нажми на верный ответ" : IsDictation ? "Введи слово → Enter" : "Введи ответ → Enter", 26, FontStyle.Regular, Ink,
                         R(766, 884, IsDictation ? 1010 : 760, 48), true);
                 g.Restore(cardText);
                 DrawCardCelebration(g, now);

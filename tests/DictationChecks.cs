@@ -12,34 +12,34 @@ namespace Bubliklyuk
     internal static class DictationChecks
     {
         private static readonly string[] Expected = {
-            "Паша ел суп", "Маша ела торт", "Мама мыла пол", "Папа пил сок", "Даня ел сыр",
-            "Нина мыла руки", "Лена мыла раму", "Рома мыл пол", "Мила пила сок", "Лиза ела рис",
-            "Вова ел суп", "Саша пил воду", "Тома мыла вазу", "Юра мыл руки", "Коля ел кашу",
-            "Дима пил воду", "Ваня ел торт", "У мамы шар", "У папы дом", "Кот пил воду"
+            "мама", "папа", "каша", "ваза", "рама",
+            "луна", "рыба", "рука", "нога", "сова",
+            "лиса", "коза", "вода", "роза", "муха",
+            "мыло", "сани", "лето", "небо", "липа"
         };
-        // SHA-256 values from the approved separated-audio manifest. These also
+        // SHA-256 values from the 2026-11-28 whole-word audio manifest. These also
         // detect swapped recordings even when their duration and pauses look valid.
         private static readonly string[] AudioHashes = {
-            "21005889b8f5f7ac1da557ae2a806d3b83a089f7dfe120054c8b1c3390d33c86",
-            "70bc39dbe9d1b4ec195971ad50fee99b54c6f387083ab39930e7fbe0b4f13eab",
-            "e4717b642008fb070c91ee348b0a427e77e1b55930bd080611b795e144bd59f4",
-            "b9a3b71c39546071ebdaaa603bba6f984204dcb8fbe26ec1fb06e8f86369fe0c",
-            "92bf40a2a1d8f7b147cf17293382f512de3959cf1e75eefea6b07d2d8880a5f4",
-            "787aa1432362ab21338e93fafa6d2bacbada0ab5bd0106cc06dd4531bd85c350",
-            "7e5dbb5b0de181041d06dce23a0b93fc18f0058e42d2dae042da01c6e46feeb1",
-            "3cedd9ffa884bbd362fbd5dd7c506a7c95abd86d8d0154786ca975e6b189a0c2",
-            "d9662d8bc5a91e6b1dd4bfbc239201072ed72c1c5e3efa8323d6ecec65068d89",
-            "6b90e5936ee60cdfa0b124c55e43f8730859e28d433835943e1b1786e6abf5fd",
-            "bf7b8b4c08d5d186590157d0e288398b50b0dbba89f7091d928f6d88c042f139",
-            "9e7194c9d3a2baf14c90652fa0427d9a8010e00d87119f67cf2589a1372d2d5a",
-            "3bb75f77996a367beead660c411d8fa8d78b79cd424cf52fc9ff786f0767e85d",
-            "e68974761aaf67b123429e6f140a81e3b62ff417e5a406e55d653d8b0a69a6a3",
-            "4d2711bdd6298842cc592255f50f743afc7b23af9378a14e697b8e03adca3bfe",
-            "8113e5eb7507da6b857bf8147b66a869424f4a145ffb7fc47fa799d7bb91f8d6",
-            "4e9e96475930f28eae5458a0a515fc64605eb3e888e5fc76ebd8ba80d1f34d8b",
-            "33cb4d85cd3f376f72ae61a2914cf3fb57ee314f42afb9e2b44b84c071d6a2e7",
-            "f34428449ecebe4113b2431bc3d8639c8ecb7c1f08283ade2dcd2d666d9ea60a",
-            "de382e9c7ea52452c0c46627db00d9989091fda07c57c4dbe991e55a963f2c91"
+            "33f2eca7b699800659e4db57925ae6651eff3e8fd246f9f5a14e7ea84a97892f",
+            "5f06998c46b6b69c549d52016ddf824570081a87fe913eb22a4c491f35d5d21a",
+            "fc601a559040e4586410dc497a74ce494d88d361f6625765f8eeffb8815bbb8a",
+            "e5ee39887e5979a0dc017f7a53ef9d23ac66aef27aa4efb6f9af63185c462f44",
+            "acb85e1eefe946e1ae7add31b1df493429b72b20ce59d2e13479abe80e555617",
+            "cd9373f77d32066e73f4a22523084a6ebb6670a06f16c454ba38317f75e80e42",
+            "95908f744ea8ddd81b8254895f328660245f6a07eb04e1dbc0f25f2c39578987",
+            "6df4e23e08761e782b3abea2cf1fd72836c771ed5354f48d81e134cf94695f7b",
+            "df2fabf0de24f5d83db6d30aef7d988f860ac848067f2de46f5785485980e275",
+            "cc5d71c6281c46f705b64883150a5c78e41f84bc4ba4c4e32ae10c3c3c31ca2a",
+            "56df23294b490a04fbcf19fcf9414d3a578ce190cb53c67f9e08720b9ec4eef5",
+            "bc6dccbbd7fd8444d41001da3fe48f286fe6e8aa20ce4fd32da45675bdb95a56",
+            "cf9699bd5477eeed2ab279d6711ac012d62912c19d4fa3f8c05edfe1e1609b60",
+            "c85b0e8d182665f17be60fae9852394a96c73a74cb08705b06a8312786eef245",
+            "b17e5c782df145dcbcdd21965b03b3f2c155440a3fb0ac5a1888ce48b481b503",
+            "205ba28dc016b87e1bc23fb6b04ce46dd8db799e3e2cf0cabdd792ed03a49878",
+            "c9dc87493900f23a59181fbc6e2248656ecb60cdc754fe417ee51683e8cc6a34",
+            "ced44201a01f72c4051272aab3cd9b2c81aafdc9b6d23d9c16c0ca0f4edf7a55",
+            "b3c9657b7d8e5f6f55b10b4dc21878780ec7ccbebf191bbe3f4acb916150ae45",
+            "0d218dfbba20bab4451cd2cf858fbe7adf4a653d48ce70230684972067d9532f"
         };
 
         internal static void Run(Action<bool, string> check)
@@ -60,9 +60,8 @@ namespace Bubliklyuk
                 string id = (i + 1).ToString("00", CultureInfo.InvariantCulture);
                 check(card.Id == id && card.Text == Expected[i] && texts.Add(card.Text), "Manifest text and ID " + id);
                 check(card.Resource == "dictation-" + id + ".wav", "Matching recording name " + id);
-                string[] words = card.Text.Split(' ');
-                check(words.Length == 3, "Three words per dictation");
-                foreach (string word in words) check(word.Length <= 4, "Short dictation word");
+                check(Regex.IsMatch(card.Text, @"^[а-яё]{4}$"), "Exactly one four-letter word per dictation");
+                check(Regex.Matches(card.Text, "[аеёиоуыэюя]").Count == 2, "Exactly two vowel nuclei per dictation");
                 Exercise exercise = card.ToExercise();
                 check(exercise.Kind == "dictation" && !exercise.Numeric && exercise.Choice == null &&
                     exercise.DictationResource == card.Resource && keys.Add(exercise.Key), "Distinct typed dictation exercise");
@@ -70,16 +69,16 @@ namespace Bubliklyuk
                     exercise.Instruction.IndexOf(card.Text, StringComparison.OrdinalIgnoreCase) < 0 &&
                     exercise.Question.Length == 0 && exercise.Picture == null, "No visible answer or answer picture");
                 check(exercise.Matches(card.Text) && exercise.Matches(card.Text.ToLowerInvariant()) &&
-                    exercise.Matches("  " + card.Text.ToUpperInvariant().Replace(" ", "   ") + " .  "),
+                    exercise.Matches("  " + card.Text.ToUpperInvariant() + " .  "),
                     "Case, spaces and optional final period accepted");
-                foreach (string wrong in new string[] { "", words[0], words[1] + " " + words[2],
-                    card.Text + " суп", card.Text + "..", card.Text + "!", card.Text.Replace(" ", ""),
-                    words[2] + " " + words[1] + " " + words[0], card.Text.Substring(0, card.Text.Length - 1),
+                foreach (string wrong in new string[] { "", card.Text.Substring(0, 2), card.Text.Substring(2),
+                    card.Text + " суп", card.Text + "..", card.Text + "!", card.Text.Insert(2, " "),
+                    card.Text + card.Text, card.Text.Substring(0, card.Text.Length - 1),
                     Expected[(i + 1) % Expected.Length] })
-                    check(!exercise.Matches(wrong), "Incomplete, changed or punctuated phrase rejected");
+                    check(!exercise.Matches(wrong), "Incomplete, changed or punctuated word rejected");
                 check(exercise.Matches(card.Text), "Errors do not change the expected dictation");
             }
-            check(DictationBank.Matches("Ёж пил воду", " ЕЖ  ПИЛ ВОДУ. "), "Dictation keeps existing е/ё equivalence");
+            check(DictationBank.Matches("ёлка", " ЕЛКА. "), "Dictation keeps existing е/ё equivalence");
             check(!DictationBank.Matches(Expected[0], null) &&
                 !DictationBank.Matches(Expected[0], new string(' ', DictationBank.MaxAnswerLength) + Expected[0]),
                 "Empty and excessive dictation input rejected");
@@ -130,7 +129,12 @@ namespace Bubliklyuk
         }
         private static void Audio(Action<bool, string> check)
         {
-            short[] intro = PcmSamples(Resource(DictationBank.IntroResource, check), check);
+            byte[] introWav = Resource(DictationBank.IntroResource, check);
+            using (SHA256 sha = SHA256.Create())
+                check(BitConverter.ToString(sha.ComputeHash(introWav)).Replace("-", "").ToLowerInvariant() ==
+                    "fead5d659e35d24c69cddb89aed239074693b0e396c8f0ea33621a2138e0b34c",
+                    "Approved introduction remains byte-for-byte unchanged");
+            short[] intro = PcmSamples(introWav, check);
             check(intro.Length > 22050 && Array.Exists(intro, delegate(short value) { return value != 0; }),
                 "Separate introduction contains speech");
             for (int i = 0; i < Expected.Length; i++)
@@ -138,8 +142,9 @@ namespace Bubliklyuk
                 byte[] wav = Resource(DictationBank.All[i].Resource, check);
                 using (SHA256 sha = SHA256.Create())
                     check(BitConverter.ToString(sha.ComputeHash(wav)).Replace("-", "").ToLowerInvariant() == AudioHashes[i],
-                        "Audio exactly matches approved manifest: " + DictationBank.All[i].Id);
+                        "Audio exactly matches whole-word manifest: " + DictationBank.All[i].Id);
                 short[] samples = PcmSamples(wav, check);
+                check(samples.Length > 5 * 22050, "Each loop contains speech plus its repeat pause");
                 List<int> silence = new List<int>();
                 int run = 0;
                 for (int sample = 0; sample <= samples.Length; sample++)
@@ -147,8 +152,8 @@ namespace Bubliklyuk
                     if (sample < samples.Length && samples[sample] == 0) run++;
                     else { if (run >= 22050) silence.Add(run); run = 0; }
                 }
-                check(silence.Count == 3 && silence[0] == 2 * 22050 && silence[1] == 2 * 22050 &&
-                    silence[2] == 5 * 22050, "Exactly 2/2/5 second pauses in each loop, without introduction");
+                check(silence.Count == 1 && silence[0] == 5 * 22050,
+                    "Only one five-second pause in each whole-word loop, without introduction");
                 check(samples[0] != 0 && samples[samples.Length - 5 * 22050 - 1] != 0 && samples[samples.Length - 1] == 0,
                     "Loop starts with speech and ends with precisely five seconds of silence");
             }

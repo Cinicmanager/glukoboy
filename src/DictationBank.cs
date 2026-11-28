@@ -16,7 +16,7 @@ namespace Bubliklyuk
         }
         internal Exercise ToExercise()
         {
-            return new Exercise("dictation", "Запиши предложение", "Слушай и печатай", Text,
+            return new Exercise("dictation", "Запиши слово", "Слушай и печатай", Text,
                 false, "", null, null, Resource);
         }
     }
@@ -25,28 +25,28 @@ namespace Bubliklyuk
     {
         internal const string IntroResource = "dictation-intro.wav";
         internal const int MaxAnswerLength = 64;
-        // Matches the approved separated-audio manifest, 2026-11-27.
+        // One easy four-letter, two-syllable word per dictation, 2026-11-28.
         internal static readonly ReadOnlyCollection<DictationCard> All = Array.AsReadOnly(new DictationCard[] {
-            new DictationCard(1, "Паша ел суп"),
-            new DictationCard(2, "Маша ела торт"),
-            new DictationCard(3, "Мама мыла пол"),
-            new DictationCard(4, "Папа пил сок"),
-            new DictationCard(5, "Даня ел сыр"),
-            new DictationCard(6, "Нина мыла руки"),
-            new DictationCard(7, "Лена мыла раму"),
-            new DictationCard(8, "Рома мыл пол"),
-            new DictationCard(9, "Мила пила сок"),
-            new DictationCard(10, "Лиза ела рис"),
-            new DictationCard(11, "Вова ел суп"),
-            new DictationCard(12, "Саша пил воду"),
-            new DictationCard(13, "Тома мыла вазу"),
-            new DictationCard(14, "Юра мыл руки"),
-            new DictationCard(15, "Коля ел кашу"),
-            new DictationCard(16, "Дима пил воду"),
-            new DictationCard(17, "Ваня ел торт"),
-            new DictationCard(18, "У мамы шар"),
-            new DictationCard(19, "У папы дом"),
-            new DictationCard(20, "Кот пил воду")
+            new DictationCard(1, "мама"),
+            new DictationCard(2, "папа"),
+            new DictationCard(3, "каша"),
+            new DictationCard(4, "ваза"),
+            new DictationCard(5, "рама"),
+            new DictationCard(6, "луна"),
+            new DictationCard(7, "рыба"),
+            new DictationCard(8, "рука"),
+            new DictationCard(9, "нога"),
+            new DictationCard(10, "сова"),
+            new DictationCard(11, "лиса"),
+            new DictationCard(12, "коза"),
+            new DictationCard(13, "вода"),
+            new DictationCard(14, "роза"),
+            new DictationCard(15, "муха"),
+            new DictationCard(16, "мыло"),
+            new DictationCard(17, "сани"),
+            new DictationCard(18, "лето"),
+            new DictationCard(19, "небо"),
+            new DictationCard(20, "липа")
         });
 
         internal static bool Matches(string expected, string input)
@@ -82,7 +82,7 @@ namespace Bubliklyuk
                     DictationCard saved = remaining[i]; remaining[i] = remaining[j]; remaining[j] = saved;
                 }
             }
-            // At a cycle boundary, postpone the previous phrase and any phrase
+            // At a cycle boundary, postpone the previous word and any word
             // already used in this attack without discarding it from the new cycle.
             int index = remaining.FindIndex(delegate(DictationCard item) {
                 return item.Id != previous && !attackIds.Contains(item.Id);

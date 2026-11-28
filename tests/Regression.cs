@@ -32,6 +32,7 @@ namespace Bubliklyuk
                 DictationChecks.Run(Check);
                 StartupHelperChecks.Run(Check, args[0]);
                 AudioChecks.Run(Check);
+                AttackAudioLifecycleChecks.Run(Check);
                 AudioChecks.RunNativeReadOnly(Check);
                 AttackLengthChecks(bank);
                 MixChecks(bank); RenderChecks(bank, args[0]);
@@ -225,21 +226,21 @@ namespace Bubliklyuk
                     Set(form, "completed", 4);
                     Call(form, "NewExercise", dictation);
                     TextBox field = (TextBox)Get(form, "answer");
-                    field.Text = "Паша ел сок";
-                    field.SelectionStart = 5;
-                    Check(field.MaxLength == 64 && form.ClientRectangle.Contains(field.Bounds), "Dictation sentence field fits the viewport");
+                    field.Text = "мамо";
+                    field.SelectionStart = 3;
+                    Check(field.MaxLength == 64 && form.ClientRectangle.Contains(field.Bounds), "Dictation word field fits the viewport");
                     Check(Get(form, "dictationPlayer") == null && !(bool)Get(form, "dictationIntroPlayed"), "Hidden dictation render never creates audio");
                     Call(form, "RepeatDictationClicked", null, EventArgs.Empty);
                     Check(Get(form, "dictationPlayer") == null, "Hidden Repeat cannot start sound");
                     Call(form, "SubmitAnswer", field.Text); Call(form, "SubmitAnswer", field.Text);
-                    Check(Object.ReferenceEquals(dictation, Get(form, "exercise")) && field.Text == "Паша ел сок" && field.SelectionStart == 5,
-                        "Dictation errors preserve sentence, caret and current task");
+                    Check(Object.ReferenceEquals(dictation, Get(form, "exercise")) && field.Text == "мамо" && field.SelectionStart == 3,
+                        "Dictation errors preserve word, caret and current task");
                     Check((int)Get(form, "completed") == 4 && (string)Get(form, "resultText") == "Послушай ещё раз", "Dictation errors neither replace nor score");
-                    field.Text = "Паша ел суп.";
+                    field.Text = "Мама.";
                     Set(form, "cardShownAt", -1000L); Set(form, "appearanceStarted", -2000L);
                     Save(form, Path.Combine(output, "dictation-" + size.Width + ".png"));
                     Check(form.ClientRectangle.Contains(((Control)Get(form, "repeatDictation")).Bounds), "Repeat button within viewport");
-                    Call(form, "SubmitAnswer", "  ПАША   ел суп. ");
+                    Call(form, "SubmitAnswer", "  МАМА. ");
                     Check((int)Get(form, "completed") == 5 && !((Control)Get(form, "repeatDictation")).Enabled, "Correct dictation scores and stops repetition control");
                     Call(form, "NewExercise", new Exercise("math", "Реши пример", "1 + 2 + 3 = □", "6", true, ""));
                     Check(field.MaxLength == AnswerRules.MaxLength, "Other exercises retain their original input rules");

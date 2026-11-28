@@ -9,8 +9,8 @@ using System.Text;
 using System.Threading;
 using System.Windows.Forms;
 
-[assembly: AssemblyVersion("1.7.1.0")]
-[assembly: AssemblyFileVersion("1.7.1.0")]
+[assembly: AssemblyVersion("1.7.2.0")]
+[assembly: AssemblyFileVersion("1.7.2.0")]
 [assembly: AssemblyTitle("Глюкобой")]
 [assembly: AssemblyProduct("Глюкобой")]
 

@@ -12,6 +12,8 @@ namespace Bubliklyuk
             Playback(check);
             Failure(check);
             Restoration(check);
+            RecreatedSession(check);
+            AudioRestoreChecks.Run(check);
         }
 
         private static void Playback(Action<bool, string> check)
@@ -121,6 +123,21 @@ namespace Bubliklyuk
             check(!other.Mute, "Snapshot precedes mutation even when setter changes state and then throws");
         }
 
+        private static void RecreatedSession(Action<bool, string> check)
+        {
+            FakeDevices source = new FakeDevices();
+            FakeDevice device = new FakeDevice { Id = "speakers", IsDefault = true, Volume = 0.7f };
+            FakeSession original = new FakeSession { Id = "roblox-1", SessionIdentifier = "roblox", Volume = 0.8f };
+            source.Items.Add(device); device.Sessions.Add(original);
+            AudioMute mute = new AudioMute(source, false);
+            mute.BeginAttack();
+            FakeSession replacement = new FakeSession { Id = "roblox-2", SessionIdentifier = "roblox", Mute = original.Mute, Volume = 0.8f };
+            device.Sessions.Clear(); device.Sessions.Add(replacement);
+            mute.Refresh(); mute.Restore();
+            check(!replacement.Mute && replacement.Volume == 0.8f,
+                "Recreated session inherits original unmuted state, not the temporary attack mute");
+        }
+
         // Optional integration probe: reads existing state only. It never invokes
         // AudioMute.Begin, any COM setter, waveOutWrite, or opens a playback stream.
         internal static void RunNativeReadOnly(Action<bool, string> check)
@@ -159,12 +176,15 @@ namespace Bubliklyuk
                             try
                             {
                                 Marshal.ThrowExceptionForHR(list.GetSession(item, out control));
-                                string id; uint processId; bool muted; float volume;
+                                string id, identifier; uint processId; int state; bool muted; float volume;
                                 Marshal.ThrowExceptionForHR(((IAudioSessionControl2)control).GetSessionInstanceIdentifier(out id));
+                                Marshal.ThrowExceptionForHR(((IAudioSessionControl2)control).GetSessionIdentifier(out identifier));
+                                Marshal.ThrowExceptionForHR(((IAudioSessionControl2)control).GetState(out state));
                                 Marshal.ThrowExceptionForHR(((IAudioSessionControl2)control).GetProcessId(out processId));
                                 Marshal.ThrowExceptionForHR(((ISimpleAudioVolume)control).GetMute(out muted));
                                 Marshal.ThrowExceptionForHR(((ISimpleAudioVolume)control).GetMasterVolume(out volume));
-                                check(!String.IsNullOrEmpty(id) && volume >= 0 && volume <= 1, "Read-only session COM ID/PID/mute/volume getters");
+                                check(!String.IsNullOrEmpty(id) && !String.IsNullOrEmpty(identifier) && state >= 0 && state <= 2 &&
+                                    volume >= 0 && volume <= 1, "Read-only session COM instance/stable ID/state/PID/mute/volume getters");
                                 sessionsRead++;
                             }
                             finally { CoreAudioDevices.Release(control); }
@@ -225,6 +245,8 @@ namespace Bubliklyuk
         private sealed class FakeSession : IAttackAudioSession
         {
             public string Id { get; set; }
+            public string SessionIdentifier { get; set; }
+            public bool IsExpired { get; set; }
             public bool IsOwn { get; set; }
             private bool mute;
             internal bool ThrowAfterMuteOnce;

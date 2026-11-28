@@ -19,24 +19,53 @@ namespace Bubliklyuk
         internal AudioMute(IAttackAudioDevices devices, bool useTimer) { this.devices = devices; this.useTimer = useTimer; }
         internal void Begin() { SetMode(false); }
         internal void BeginAttack() { SetMode(true); }
+        internal bool HasPendingRestore { get { return !active && saved.Count != 0; } }
 
         private void SetMode(bool isAttack)
         {
+            // A failed release from the preceding attack must not become the
+            // next attack's "original" state.
+            if (!active && saved.Count != 0)
+            {
+                Restore();
+                foreach (DeviceState state in saved.Values)
+                {
+                    state.Rebase = true;
+                    foreach (SessionState session in state.Sessions.Values) session.Rebase = true;
+                }
+            }
             // Attack -> night retains the ORIGINAL snapshot until Restore().
             active = true;
             attack = isAttack;
             Refresh();
-            if (useTimer && timer == null)
+            UpdateTimer();
+        }
+
+        private void UpdateTimer()
+        {
+            if (!useTimer) return;
+            if (!active && saved.Count == 0)
             {
-                timer = new System.Windows.Forms.Timer { Interval = 500 };
-                timer.Tick += delegate { Refresh(); };
-                timer.Start();
+                if (timer != null) { timer.Stop(); timer.Dispose(); timer = null; }
+                return;
             }
+            if (timer == null)
+            {
+                timer = new System.Windows.Forms.Timer();
+                timer.Tick += delegate { Refresh(); };
+            }
+            timer.Interval = active ? 500 : 1000;
+            timer.Start();
         }
 
         internal void Refresh()
         {
-            if (!active) return;
+            if (!active)
+            {
+                if (saved.Count != 0) { RestorePass(); DiscardRestored(); }
+                UpdateTimer();
+                return;
+            }
             IList<IAttackAudioDevice> current;
             try { current = devices.OpenActiveDevices(); }
             catch (Exception ex) { Diag.Log("AudioMute.EnumerateDevices", ex); return; }
@@ -51,17 +80,25 @@ namespace Bubliklyuk
                         state = new DeviceState(device);
                         saved.Add(device.Id, state);
                     }
-                    else { state.Device.Dispose(); state.Device = device; }
+                    else { ReplaceDevice(state, device); }
                     retained = true;
+                    if (state.Rebase)
+                    {
+                        // Already released properties may have been changed by
+                        // the user between attacks; only unfinished ones retain
+                        // the preceding cycle's original.
+                        if (!state.MuteChanged) state.Mute = device.Mute;
+                        if (!state.VolumeChanged) state.Volume = device.Volume;
+                        state.Rebase = false;
+                    }
                     if (attack)
                     {
                         // Silence other sessions BEFORE unmuting the master.
-                        UpdateSessions(state);
+                        UpdateSessions(state, true);
                         if (device.IsDefault)
                         {
                             if (device.Volume <= 0.0001f) { state.VolumeChanged = true; device.Volume = 0.25f; }
-                            state.MuteChanged = true;
-                            device.Mute = false;
+                            if (device.Mute) { state.MuteChanged = true; device.Mute = false; }
                         }
                         else if (state.MuteChanged)
                         {
@@ -69,16 +106,23 @@ namespace Bubliklyuk
                             if (state.VolumeChanged) device.Volume = state.Volume;
                         }
                     }
-                    else { state.MuteChanged = true; device.Mute = true; }
+                    else if (!device.Mute) { state.MuteChanged = true; device.Mute = true; }
                 }
                 catch (Exception ex) { Diag.Log("AudioMute.Refresh", ex); }
-                finally { if (!retained) device.Dispose(); }
+                finally { if (!retained) Release(device); }
             }
         }
 
-        private static void UpdateSessions(DeviceState state)
+        private static bool UpdateSessions(DeviceState state, bool enforce)
         {
             IList<IAttackAudioSession> current = state.Device.OpenSessions();
+            AudioSessionList nativeList = current as AudioSessionList;
+            bool complete = nativeList == null || nativeList.Complete;
+            // Identity is scoped to this endpoint. Two simultaneous instances
+            // of one application may intentionally have different mute settings.
+            HashSet<string> live = new HashSet<string>(StringComparer.Ordinal);
+            foreach (IAttackAudioSession session in current)
+                if (!session.IsExpired) live.Add(session.Id);
             foreach (IAttackAudioSession session in current)
             {
                 bool retained = false;
@@ -88,56 +132,216 @@ namespace Bubliklyuk
                     if (!state.Sessions.TryGetValue(session.Id, out snapshot))
                     {
                         snapshot = new SessionState(session);
+                        InheritOriginal(state, snapshot, current, live);
+                        // At release, touch only sessions whose inherited state
+                        // belongs to us; an unrelated app may have appeared.
+                        if (!enforce && !snapshot.Pending) continue;
                         state.Sessions.Add(session.Id, snapshot);
                     }
-                    else { snapshot.Session.Dispose(); snapshot.Session = session; }
+                    else
+                    {
+                        if (!Object.ReferenceEquals(snapshot.Session, session)) Release(snapshot.Session);
+                        snapshot.Session = session;
+                    }
                     retained = true;
-                    if (session.IsOwn && session.Volume <= 0.0001f) { snapshot.VolumeChanged = true; session.Volume = 1.0f; }
-                    snapshot.MuteChanged = true;
-                    session.Mute = !session.IsOwn;
+                    if (enforce && snapshot.Rebase)
+                    {
+                        if (!snapshot.MuteChanged)
+                        {
+                            bool currentMute = session.Mute;
+                            if (snapshot.Mute != currentMute) snapshot.MuteOwned = false;
+                            snapshot.Mute = currentMute;
+                        }
+                        if (session.IsOwn && !snapshot.VolumeChanged)
+                        {
+                            float currentVolume = session.Volume;
+                            if (snapshot.Volume != currentVolume) snapshot.VolumeOwned = false;
+                            snapshot.Volume = currentVolume;
+                        }
+                        snapshot.Rebase = false;
+                    }
+                    // Expired external streams need no new mute. In particular,
+                    // do not re-acquire a retired ancestor's transferred restore
+                    // obligation when it happens to follow its successor in the list.
+                    if (!enforce || (session.IsExpired && !session.IsOwn)) continue;
+                    if (session.IsOwn && session.Volume <= 0.0001f)
+                    {
+                        snapshot.VolumeChanged = snapshot.VolumeOwned = true;
+                        session.Volume = 1.0f;
+                    }
+                    bool desired = !session.IsOwn;
+                    if (snapshot.Mute != desired || session.Mute != desired)
+                        snapshot.MuteChanged = snapshot.MuteOwned = true;
+                    if (session.Mute != desired) session.Mute = desired;
                 }
-                catch (Exception ex) { Diag.Log("AudioMute.Session", ex); }
-                finally { if (!retained) session.Dispose(); }
+                catch (Exception ex) { complete = false; Diag.Log("AudioMute.Session", ex); }
+                finally { if (!retained) Release(session); }
+            }
+            return complete;
+        }
+
+        private static void InheritOriginal(DeviceState state, SessionState replacement,
+            IList<IAttackAudioSession> current, HashSet<string> live)
+        {
+            if (String.IsNullOrEmpty(replacement.Identifier)) return;
+            foreach (IAttackAudioSession session in current)
+                if (session.Id != replacement.Session.Id && !session.IsExpired &&
+                    session.SessionIdentifier == replacement.Identifier) return;
+
+            List<SessionState> predecessors = new List<SessionState>();
+            SessionState original = null;
+            bool muteOwned = false, volumeOwned = false;
+            foreach (KeyValuePair<string, SessionState> entry in state.Sessions)
+            {
+                SessionState candidate = entry.Value;
+                if (live.Contains(entry.Key) || candidate.Identifier != replacement.Identifier ||
+                    candidate.IsOwn != replacement.IsOwn) continue;
+                // Ambiguous histories must not unmute an intentionally muted
+                // instance. Instance identity always wins while it is present.
+                if (original != null && (original.Mute != candidate.Mute ||
+                    (replacement.IsOwn && original.Volume != candidate.Volume))) return;
+                original = candidate;
+                predecessors.Add(candidate);
+                muteOwned |= candidate.MuteOwned;
+                volumeOwned |= candidate.VolumeOwned;
+            }
+            if (original == null) return;
+            // Rendering-session mute/volume persist across new instances:
+            // https://learn.microsoft.com/windows/win32/coreaudio/audio-sessions
+            // Carry ownership only from an unambiguous retired instance, never
+            // by executable name/PID or across different output endpoints.
+            if (muteOwned)
+            {
+                bool inherited = replacement.Mute != original.Mute;
+                replacement.Mute = original.Mute;
+                replacement.MuteOwned = true;
+                replacement.MuteChanged = inherited;
+                foreach (SessionState predecessor in predecessors) predecessor.MuteChanged = false;
+            }
+            if (volumeOwned && (replacement.Volume == 1.0f || replacement.Volume == original.Volume))
+            {
+                bool inherited = replacement.Volume != original.Volume;
+                replacement.Volume = original.Volume;
+                replacement.VolumeOwned = true;
+                replacement.VolumeChanged = inherited;
+                foreach (SessionState predecessor in predecessors) predecessor.VolumeChanged = false;
             }
         }
 
         internal void Restore()
         {
             active = false;
-            if (timer != null) { timer.Stop(); timer.Dispose(); timer = null; }
+            if (timer != null) timer.Stop();
+            // Re-enumerate on BOTH attempts: retrying an invalid COM handle
+            // twice cannot recover a replaced session or a reconnected device.
+            RestorePass();
+            RestorePass();
+            DiscardRestored();
+            UpdateTimer();
+        }
+
+        private void RestorePass()
+        {
+            if (saved.Count == 0) return;
+            foreach (DeviceState state in saved.Values) state.RestoreEnumerated = false;
+            IList<IAttackAudioDevice> current = null;
+            try { current = devices.OpenActiveDevices(); }
+            catch (Exception ex) { Diag.Log("AudioMute.Restore.EnumerateDevices", ex); }
+            if (current != null)
+            {
+                foreach (IAttackAudioDevice device in current)
+                {
+                    DeviceState state;
+                    if (!saved.TryGetValue(device.Id, out state)) { Release(device); continue; }
+                    ReplaceDevice(state, device);
+                    try { state.RestoreEnumerated = UpdateSessions(state, false); }
+                    catch (Exception ex) { Diag.Log("AudioMute.Restore.EnumerateSessions", ex); }
+                }
+            }
             foreach (DeviceState state in saved.Values)
             {
                 // Restore original volume/mute before releasing the other sessions.
-                if (state.VolumeChanged) TryRestore(delegate { state.Device.Volume = state.Volume; });
-                if (state.MuteChanged) TryRestore(delegate { state.Device.Mute = state.Mute; });
+                if (state.VolumeChanged && TryRestore(delegate
+                {
+                    state.Device.Volume = state.Volume;
+                    return Near(state.Device.Volume, state.Volume);
+                })) state.VolumeChanged = false;
+                if (state.MuteChanged && TryRestore(delegate
+                {
+                    state.Device.Mute = state.Mute;
+                    return state.Device.Mute == state.Mute;
+                })) state.MuteChanged = false;
                 foreach (SessionState session in state.Sessions.Values)
                 {
-                    if (session.VolumeChanged) TryRestore(delegate { session.Session.Volume = session.Volume; });
-                    if (session.MuteChanged) TryRestore(delegate { session.Session.Mute = session.Mute; });
-                    session.Session.Dispose();
+                    if (session.VolumeChanged && TryRestore(delegate
+                    {
+                        session.Session.Volume = session.Volume;
+                        return Near(session.Session.Volume, session.Volume);
+                    })) session.VolumeChanged = false;
+                    if (session.MuteChanged && TryRestore(delegate
+                    {
+                        session.Session.Mute = session.Mute;
+                        return session.Session.Mute == session.Mute;
+                    })) session.MuteChanged = false;
                 }
-                state.Device.Dispose();
             }
-            saved.Clear();
         }
 
-        private static void TryRestore(Action restore)
+        private void DiscardRestored()
         {
-            try { restore(); }
-            catch (Exception first)
+            bool hadSaved = saved.Count != 0;
+            List<string> completedDevices = new List<string>();
+            foreach (KeyValuePair<string, DeviceState> entry in saved)
             {
-                Diag.Log("AudioMute.Restore", first);
-                try { restore(); }
-                catch (Exception retry) { Diag.Log("AudioMute.Restore.Retry", retry); }
+                DeviceState state = entry.Value;
+                // Successful writes to an old handle do not prove that a
+                // replacement session was released if enumeration failed.
+                if (!state.RestoreEnumerated) continue;
+                List<string> completedSessions = new List<string>();
+                foreach (KeyValuePair<string, SessionState> session in state.Sessions)
+                    if (!session.Value.Pending) { Release(session.Value.Session); completedSessions.Add(session.Key); }
+                foreach (string id in completedSessions) state.Sessions.Remove(id);
+                if (!state.MuteChanged && !state.VolumeChanged && state.Sessions.Count == 0)
+                {
+                    Release(state.Device);
+                    completedDevices.Add(entry.Key);
+                }
             }
+            foreach (string id in completedDevices) saved.Remove(id);
+            if (hadSaved && saved.Count == 0) Diag.Info("AudioMute.Restore: complete; no pending audio changes.");
+        }
+
+        private static bool TryRestore(Func<bool> restore)
+        {
+            try
+            {
+                if (restore()) return true;
+                Diag.Info("AudioMute.Restore: state read-back differs; keeping original for retry.");
+            }
+            catch (Exception ex) { Diag.Log("AudioMute.Restore", ex); }
+            return false;
+        }
+
+        private static bool Near(float first, float second) { return Math.Abs(first - second) <= 0.0001f; }
+
+        private static void ReplaceDevice(DeviceState state, IAttackAudioDevice device)
+        {
+            if (!Object.ReferenceEquals(state.Device, device)) Release(state.Device);
+            state.Device = device;
+        }
+
+        private static void Release(IDisposable value)
+        {
+            try { value.Dispose(); }
+            catch (Exception ex) { Diag.Log("AudioMute.Dispose", ex); }
         }
 
         private sealed class DeviceState
         {
             internal IAttackAudioDevice Device;
-            internal readonly bool Mute;
-            internal readonly float Volume;
-            internal bool MuteChanged, VolumeChanged;
+            internal bool Mute;
+            internal float Volume;
+            internal bool MuteChanged, VolumeChanged, RestoreEnumerated, Rebase;
             internal readonly Dictionary<string, SessionState> Sessions = new Dictionary<string, SessionState>(StringComparer.Ordinal);
             internal DeviceState(IAttackAudioDevice device) { Mute = device.Mute; Volume = device.Volume; Device = device; }
         }
@@ -145,12 +349,16 @@ namespace Bubliklyuk
         private sealed class SessionState
         {
             internal IAttackAudioSession Session;
-            internal readonly bool Mute;
-            internal readonly float Volume;
-            internal bool MuteChanged, VolumeChanged;
+            internal readonly string Identifier;
+            internal readonly bool IsOwn;
+            internal bool Mute;
+            internal float Volume;
+            internal bool MuteChanged, VolumeChanged, MuteOwned, VolumeOwned, Rebase;
+            internal bool Pending { get { return MuteChanged || VolumeChanged; } }
             internal SessionState(IAttackAudioSession session)
             {
                 Mute = session.Mute; Volume = session.IsOwn ? session.Volume : 0; Session = session;
+                Identifier = session.SessionIdentifier; IsOwn = session.IsOwn;
             }
         }
     }
@@ -167,9 +375,18 @@ namespace Bubliklyuk
     internal interface IAttackAudioSession : IDisposable
     {
         string Id { get; }
+        string SessionIdentifier { get; }
+        bool IsExpired { get; }
         bool IsOwn { get; }
         bool Mute { get; set; }
         float Volume { get; set; }
+    }
+
+    // A partial native enumeration is useful during an attack but cannot prove
+    // that all replacement instances were inspected when releasing the mute.
+    internal sealed class AudioSessionList : List<IAttackAudioSession>
+    {
+        internal bool Complete = true;
     }
 
     internal sealed class CoreAudioDevices : IAttackAudioDevices
@@ -266,7 +483,7 @@ namespace Bubliklyuk
 
         public IList<IAttackAudioSession> OpenSessions()
         {
-            List<IAttackAudioSession> result = new List<IAttackAudioSession>();
+            AudioSessionList result = new AudioSessionList();
             IAudioSessionEnumerator list = null;
             try
             {
@@ -295,7 +512,7 @@ namespace Bubliklyuk
                         if (session.Id == ownId) session.Dispose();
                         else result.Add(session);
                     }
-                    catch (Exception ex) { Diag.Log("AudioMute.OpenSession", ex); }
+                    catch (Exception ex) { result.Complete = false; Diag.Log("AudioMute.OpenSession", ex); }
                     finally { CoreAudioDevices.Release(control); }
                 }
                 return result;
@@ -321,16 +538,22 @@ namespace Bubliklyuk
         private ISimpleAudioVolume volume;
         private static readonly uint ProcessId = (uint)Process.GetCurrentProcess().Id;
         public string Id { get; private set; }
+        public string SessionIdentifier { get; private set; }
+        public bool IsExpired { get; private set; }
         public bool IsOwn { get; private set; }
         internal CoreAudioSession(IAudioSessionControl control, bool own)
         {
             IAudioSessionControl2 details = (IAudioSessionControl2)control;
-            uint processId; string id;
+            uint processId; string id, identifier; int state;
             Marshal.ThrowExceptionForHR(details.GetProcessId(out processId));
             Marshal.ThrowExceptionForHR(details.GetSessionInstanceIdentifier(out id));
+            Marshal.ThrowExceptionForHR(details.GetSessionIdentifier(out identifier));
+            Marshal.ThrowExceptionForHR(details.GetState(out state));
             volume = (ISimpleAudioVolume)control;
             this.control = control;
             Id = id;
+            SessionIdentifier = identifier;
+            IsExpired = state == 2;
             IsOwn = own || processId == ProcessId;
         }
         public bool Mute

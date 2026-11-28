@@ -19,7 +19,7 @@ namespace Bubliklyuk
         {
             repeatDictation = new ActionButton();
             repeatDictation.Text = "Повторить";
-            repeatDictation.AccessibleName = "Повторить предложение";
+            repeatDictation.AccessibleName = "Повторить слово";
             repeatDictation.TabIndex = 2;
             repeatDictation.Visible = false;
             repeatDictation.Click += RepeatDictationClicked;
@@ -29,7 +29,7 @@ namespace Bubliklyuk
         private void SetUpDictation()
         {
             answer.MaxLength = IsDictation ? DictationAnswerMaxLength : AnswerRules.MaxLength;
-            answer.AccessibleName = IsDictation ? "Введи услышанное предложение" : "Ответ";
+            answer.AccessibleName = IsDictation ? "Введи услышанное слово" : "Ответ";
             repeatDictation.Visible = IsDictation;
             repeatDictation.Enabled = IsDictation;
             help.Visible = !IsDictation;
@@ -46,7 +46,7 @@ namespace Bubliklyuk
             float size = Math.Max(24, 40 * scale);
             float minimum = Math.Max(18, 26 * scale);
             int availableWidth = Math.Max(1, (int)Math.Floor(AnswerFieldBounds().Width - 48 * scale));
-            // Keep the whole short sentence visible as it is entered, including a final period.
+            // Keep the whole word visible as it is entered, including a final period.
             for (; ; size = Math.Max(minimum, size - 1))
             {
                 using (Font candidate = new Font("Segoe UI", size, FontStyle.Regular, GraphicsUnit.Pixel))
@@ -145,7 +145,7 @@ namespace Bubliklyuk
 
         private void DrawDictationQuestion(Graphics g, long now, Color ink)
         {
-            DrawText(g, "Послушай и введи предложение", 34, FontStyle.Bold, ink,
+            DrawText(g, "Послушай и введи слово", 34, FontStyle.Bold, ink,
                 R(766, 294, 1010, 72), true);
             using (SolidBrush circle = new SolidBrush(Color.FromArgb(ink.A, 228, 238, 226)))
                 g.FillEllipse(circle, R(1199, 384, 144, 144));
